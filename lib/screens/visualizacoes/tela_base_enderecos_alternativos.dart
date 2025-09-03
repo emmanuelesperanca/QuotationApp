@@ -20,34 +20,32 @@ class _TelaBaseEnderecosAlternativosState extends State<TelaBaseEnderecosAlterna
   void initState() {
     super.initState();
     _refreshList();
+    _updateCount();
+  }
+
+  void _updateCount() async {
+    final count = await widget.database.countEnderecos();
+     if (mounted) {
+      setState(() => _totalEnderecos = count);
+    }
   }
 
   void _refreshList() {
     setState(() {
       _enderecosFuture = widget.database.getTodosEnderecosAlternativos();
-       _updateCount();
     });
   }
 
-  Future<void> _updateCount() async {
-    final count = await widget.database.countEnderecos();
-    if (mounted) {
-      setState(() {
-        _totalEnderecos = count;
-      });
-    }
-  }
-
-
   void _handleSync() async {
     final appData = Provider.of<AppDataNotifier>(context, listen: false);
-    final success = await appData.syncEnderecosOnline(); 
+    final success = await appData.syncEnderecosFromAPI(); 
     if (mounted) {
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Base de endereços sincronizada com sucesso!'), backgroundColor: Colors.green));
         _refreshList();
+        _updateCount();
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erro ao atualizar a base. Verifique a sua ligação.'), backgroundColor: Colors.red));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erro ao sincronizar a base de endereços.'), backgroundColor: Colors.red));
       }
     }
   }
@@ -75,6 +73,7 @@ class _TelaBaseEnderecosAlternativosState extends State<TelaBaseEnderecosAlterna
     if (confirm == true) {
       await widget.database.apagarTodosEnderecos();
       _refreshList();
+      _updateCount();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Base de endereços limpa com sucesso.'), backgroundColor: Colors.green),
@@ -117,25 +116,39 @@ class _TelaBaseEnderecosAlternativosState extends State<TelaBaseEnderecosAlterna
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                     Expanded(
+                    Expanded(
                       child: Text(
                         lastSync != null 
-                          ? 'Última atualização: ${DateFormat('dd/MM/yy HH:mm').format(lastSync)} ($_totalEnderecos itens)' 
-                          : 'Nunca atualizado',
+                        ? 'Última atualização: ${DateFormat('dd/MM/yy HH:mm').format(lastSync)} ($_totalEnderecos itens)' 
+                        : 'Nunca atualizado',
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    ElevatedButton.icon(
-                      onPressed: appData.isSyncing ? null : _handleSync,
-                      icon: appData.isSyncing ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2,)) : const Icon(Icons.sync),
-                      label: Text(appData.isSyncing ? 'A Sincronizar...' : 'Atualizar Base Online'),
-                    )
+                    if (appData.isSyncing)
+                      ElevatedButton.icon(
+                        onPressed: appData.cancelSync,
+                        icon: const Icon(Icons.stop_circle_outlined),
+                        label: const Text('Parar'),
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+                      )
+                    else
+                      ElevatedButton.icon(
+                        onPressed: _handleSync,
+                        icon: const Icon(Icons.sync),
+                        label: const Text('Atualizar Base Online'),
+                      ),
                   ],
                 ),
-                 if (appData.isSyncing && appData.syncMessage.isNotEmpty)
+                if (appData.isSyncing)
                   Padding(
                     padding: const EdgeInsets.only(top: 8.0),
-                    child: Text(appData.syncMessage, style: const TextStyle(color: Colors.amber)),
+                    child: Column(
+                      children: [
+                        LinearProgressIndicator(value: appData.syncProgress),
+                        const SizedBox(height: 4),
+                        Text(appData.syncMessage, style: const TextStyle(fontSize: 12)),
+                      ],
+                    ),
                   ),
               ],
             ),
@@ -144,7 +157,18 @@ class _TelaBaseEnderecosAlternativosState extends State<TelaBaseEnderecosAlterna
             child: FutureBuilder<List<EnderecoAlternativo>>(
               future: _enderecosFuture,
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+                 if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 16),
+                        Text('A carregar base de endereços...'),
+                      ],
+                    ),
+                  );
+                }
                 if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("Nenhum endereço encontrado."));
                 
                 final enderecos = snapshot.data!;

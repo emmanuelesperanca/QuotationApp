@@ -41,10 +41,13 @@ class _TelaPedidosPendentesState extends State<TelaPedidosPendentes> {
     
     try {
       final pedidoData = jsonDecode(pedido.pedidoJson);
+      final pdfBytes = await PdfService.generateOrderPdfBytes(pedidoData);
+      final pdfBase64 = base64Encode(pdfBytes);
+      pedidoData['pdf_base64'] = pdfBase64;
+
       final sucesso = await ApiService.enviarPedido(pedidoData);
 
-      // --- CORREÇÃO APLICADA ---
-      if (!mounted) return; // Garante que o widget ainda está na árvore de widgets
+      if (!mounted) return;
 
       if (sucesso == true) {
         final appPedidoId = pedidoData['app_pedido_id'] as String;
@@ -145,7 +148,7 @@ class _TelaPedidosPendentesState extends State<TelaPedidosPendentes> {
                           IconButton(
                             icon: const Icon(Icons.print_outlined),
                             tooltip: 'Imprimir Cópia do Pedido',
-                            onPressed: () => PdfService.generateAndPrintOrderPdf(pedidoData),
+                            onPressed: () => PdfService.generateAndPrintPdf(pedidoData),
                           ),
                           IconButton(
                             icon: const Icon(Icons.upload),
@@ -212,4 +215,3 @@ class _TelaPedidosPendentesState extends State<TelaPedidosPendentes> {
     );
   }
 }
-

@@ -6,7 +6,7 @@ import '../../database.dart';
 import '../../models/item_pedido.dart';
 import '../../api_service.dart';
 import '../../pdf_service.dart';
-import '../../providers/auth_notifier.dart'; // --- IMPORTAÇÃO ADICIONADA ---
+import '../../providers/auth_notifier.dart'; 
 
 class TelaHistorico extends StatefulWidget {
   final AppDatabase database;
@@ -155,7 +155,7 @@ class _TelaHistoricoState extends State<TelaHistorico> {
                                  IconButton(
                                    icon: const Icon(Icons.print_outlined),
                                    tooltip: 'Imprimir Cópia do Pedido',
-                                   onPressed: () => PdfService.generateAndPrintOrderPdf(pedidoData),
+                                   onPressed: () => PdfService.generateAndPrintPdf(pedidoData),
                                  ),
                                  IconButton(
                                    icon: const Icon(Icons.sync),
@@ -228,4 +228,3 @@ class _TelaHistoricoState extends State<TelaHistorico> {
     );
   }
 }
-

@@ -22,20 +22,9 @@ class MainLayout extends StatefulWidget {
 
 class _MainLayoutState extends State<MainLayout> {
   int _selectedIndex = 0;
-  late final List<Widget> _pages;
-
-  @override
-  void initState() {
-    super.initState();
-    _pages = [
-      const BrandingPage(),
-      TelaDePedido(database: widget.database),
-      TelaPreCadastroCliente(database: widget.database),
-      TelaVisualizacoes(database: widget.database),
-      const TelaConfiguracoes(),
-      const TelaAjuda(),
-    ];
-  }
+  
+  // O PageController permite manter o estado das páginas
+  final PageController _pageController = PageController();
 
   void _logoff(BuildContext context) {
     Navigator.pushAndRemoveUntil(
@@ -43,6 +32,12 @@ class _MainLayoutState extends State<MainLayout> {
       MaterialPageRoute(builder: (context) => TelaLogin(database: widget.database)),
       (Route<dynamic> route) => false,
     );
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
   }
 
   @override
@@ -71,15 +66,18 @@ class _MainLayoutState extends State<MainLayout> {
           ),
           Row(
             children: [
-              // ATUALIZADO: NavigationRail agora está dentro de uma Column
               Container(
-                color: Colors.black.withOpacity(isHomePage ? 0.2 : 0.4),
+                // A opacidade foi aumentada para 0.6
+                color: Colors.black.withOpacity(isHomePage ? 0.2 : 0.6),
                 child: Column(
                   children: [
                     Expanded(
                       child: NavigationRail(
                         selectedIndex: _selectedIndex,
-                        onDestinationSelected: (index) => setState(() => _selectedIndex = index),
+                        onDestinationSelected: (index) {
+                          setState(() => _selectedIndex = index);
+                          _pageController.jumpToPage(index); // Muda de página sem animação
+                        },
                         backgroundColor: Colors.transparent,
                         minWidth: 100,
                         labelType: NavigationRailLabelType.all,
@@ -89,7 +87,7 @@ class _MainLayoutState extends State<MainLayout> {
                             const SizedBox(height: 20),
                             Image.asset('assets/images/logo_white.png', width: 60, errorBuilder: (c, e, s) => const Icon(Icons.business, size: 60)),
                             const SizedBox(height: 8),
-                            const Text("A Straumann Group App", style: TextStyle(fontSize: 8)),
+                            const Text("Order to Smile", style: TextStyle(fontSize: 10)),
                             const SizedBox(height: 40),
                           ],
                         ),
@@ -115,7 +113,6 @@ class _MainLayoutState extends State<MainLayout> {
                         ],
                       ),
                     ),
-                    // ATUALIZADO: Seção de Logoff
                     Padding(
                       padding: const EdgeInsets.only(bottom: 20.0),
                       child: PopupMenuButton<String>(
@@ -127,7 +124,7 @@ class _MainLayoutState extends State<MainLayout> {
                         },
                         itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
                           PopupMenuItem<String>(
-                            enabled: false, // Não clicável
+                            enabled: false,
                             child: Text(auth.username ?? 'Utilizador', style: const TextStyle(fontWeight: FontWeight.bold)),
                           ),
                           const PopupMenuDivider(),
@@ -147,7 +144,19 @@ class _MainLayoutState extends State<MainLayout> {
               ),
               const VerticalDivider(thickness: 1, width: 1),
               Expanded(
-                child: _pages[_selectedIndex],
+                // PageView mantém o estado das telas filhas
+                child: PageView(
+                  controller: _pageController,
+                  physics: const NeverScrollableScrollPhysics(), // Desativa o scroll lateral
+                  children: [
+                    const BrandingPage(),
+                    const TelaDePedido(), // Não precisa mais de passar a base de dados
+                    TelaPreCadastroCliente(database: widget.database),
+                    TelaVisualizacoes(database: widget.database),
+                    const TelaConfiguracoes(),
+                    const TelaAjuda(),
+                  ],
+                ),
               ),
             ],
           ),

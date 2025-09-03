@@ -21,33 +21,32 @@ class _TelaBaseProdutosState extends State<TelaBaseProdutos> {
   void initState() {
     super.initState();
     _refreshList();
+    _updateCount();
   }
   
+  void _updateCount() async {
+    final count = await widget.database.countProdutos();
+    if (mounted) {
+      setState(() => _totalProdutos = count);
+    }
+  }
+
   void _refreshList() {
      setState(() {
       _produtosFuture = widget.database.getTodosProdutos();
-      _updateCount();
     });
-  }
-
-  Future<void> _updateCount() async {
-    final count = await widget.database.countProdutos();
-    if (mounted) {
-      setState(() {
-        _totalProdutos = count;
-      });
-    }
   }
 
   void _handleSync() async {
     final appData = Provider.of<AppDataNotifier>(context, listen: false);
-    final success = await appData.syncProdutosOnline();
+    final success = await appData.syncProdutosFromAPI();
     if(mounted) {
       if (success) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Base de produtos sincronizada com sucesso!'), backgroundColor: Colors.green));
         _refreshList();
+        _updateCount();
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erro ao atualizar a base. Verifique a sua ligação.'), backgroundColor: Colors.red));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erro ao sincronizar a base de produtos.'), backgroundColor: Colors.red));
       }
     }
   }
@@ -75,6 +74,7 @@ class _TelaBaseProdutosState extends State<TelaBaseProdutos> {
     if (confirm == true) {
       await widget.database.apagarTodosProdutos();
       _refreshList();
+      _updateCount();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Base de produtos limpa com sucesso.'), backgroundColor: Colors.green),
@@ -118,24 +118,38 @@ class _TelaBaseProdutosState extends State<TelaBaseProdutos> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                      Expanded(
-                      child: Text(
+                       child: Text(
                         lastSync != null 
-                          ? 'Última atualização: ${DateFormat('dd/MM/yy HH:mm').format(lastSync)} ($_totalProdutos itens)' 
-                          : 'Nunca atualizado',
+                        ? 'Última atualização: ${DateFormat('dd/MM/yy HH:mm').format(lastSync)} ($_totalProdutos itens)' 
+                        : 'Nunca atualizado',
                         overflow: TextOverflow.ellipsis,
+                                       ),
+                     ),
+                    if (appData.isSyncing)
+                      ElevatedButton.icon(
+                        onPressed: appData.cancelSync,
+                        icon: const Icon(Icons.stop_circle_outlined),
+                        label: const Text('Parar'),
+                        style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+                      )
+                    else
+                      ElevatedButton.icon(
+                        onPressed: _handleSync,
+                        icon: const Icon(Icons.sync),
+                        label: const Text('Atualizar Base Online'),
                       ),
-                    ),
-                    ElevatedButton.icon(
-                      onPressed: appData.isSyncing ? null : _handleSync,
-                      icon: appData.isSyncing ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2,)) : const Icon(Icons.sync),
-                      label: Text(appData.isSyncing ? 'A Sincronizar...' : 'Atualizar Base Online'),
-                    )
                   ],
                 ),
-                 if (appData.isSyncing && appData.syncMessage.isNotEmpty)
+                 if (appData.isSyncing)
                   Padding(
                     padding: const EdgeInsets.only(top: 8.0),
-                    child: Text(appData.syncMessage, style: const TextStyle(color: Colors.amber)),
+                    child: Column(
+                      children: [
+                        LinearProgressIndicator(value: appData.syncProgress),
+                        const SizedBox(height: 4),
+                        Text(appData.syncMessage, style: const TextStyle(fontSize: 12)),
+                      ],
+                    ),
                   ),
               ],
             ),
@@ -144,7 +158,18 @@ class _TelaBaseProdutosState extends State<TelaBaseProdutos> {
             child: FutureBuilder<List<Produto>>(
               future: _produtosFuture,
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 16),
+                        Text('A carregar base de produtos...'),
+                      ],
+                    ),
+                  );
+                }
                 if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("Nenhum produto encontrado."));
                 
                 final produtos = snapshot.data!;

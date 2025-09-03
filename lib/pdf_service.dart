@@ -2,22 +2,26 @@ import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
-import 'package:intl/intl.dart'; // --- IMPORTAÇÃO ADICIONADA ---
+import 'package:intl/intl.dart';
+import 'package:printing/printing.dart'; // Import necessário para impressão
 import '../models/item_pedido.dart';
 
 class PdfService {
-  static Future<void> generateAndPrintOrderPdf(Map<String, dynamic> pedidoData) async {
-    final pdf = pw.Document();
+  // Novo método para gerar e imprimir o PDF diretamente
+  static Future<void> generateAndPrintPdf(Map<String, dynamic> pedidoData) async {
+    final bytes = await generateOrderPdfBytes(pedidoData);
+    await Printing.layoutPdf(onLayout: (PdfPageFormat format) async => bytes);
+  }
 
-    final logo = pw.MemoryImage(
-      (await rootBundle.load('assets/images/logo.png')).buffer.asUint8List(),
-    );
+  // Gera o PDF como bytes, para ser enviado para a API ou impresso
+  static Future<Uint8List> generateOrderPdfBytes(Map<String, dynamic> pedidoData) async {
+    final pdf = pw.Document();
+    final logo = pw.MemoryImage((await rootBundle.load('assets/images/logo.png')).buffer.asUint8List());
 
     final List<dynamic> itensJson = (pedidoData['itens'] is String)
         ? jsonDecode(pedidoData['itens'])
         : pedidoData['itens'];
-        
+
     final List<ItemPedido> itens = itensJson.map((item) => ItemPedido.fromJson(item)).toList();
 
     pdf.addPage(
@@ -27,15 +31,11 @@ class PdfService {
           return pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              // --- CABEÇALHO ---
+              // Cabeçalho
               pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
-                  pw.SizedBox(
-                    height: 60,
-                    width: 180,
-                    child: pw.Image(logo),
-                  ),
+                  pw.SizedBox(height: 60, width: 180, child: pw.Image(logo)),
                   pw.Column(
                     crossAxisAlignment: pw.CrossAxisAlignment.end,
                     children: [
@@ -46,13 +46,11 @@ class PdfService {
                   ),
                 ],
               ),
-              // --- CORREÇÃO DE PARÂMETRO ---
               pw.Padding(
                 padding: const pw.EdgeInsets.symmetric(vertical: 20),
                 child: pw.Divider(thickness: 2),
               ),
-
-              // --- DADOS DO CLIENTE E PEDIDO ---
+              // Dados do Cliente e Pedido
               pw.Row(
                 crossAxisAlignment: pw.CrossAxisAlignment.start,
                 children: [
@@ -85,48 +83,30 @@ class PdfService {
                 ],
               ),
               pw.SizedBox(height: 30),
-
-              // --- TABELA DE ITENS ---
+              // Tabela de Itens
               pw.Text('Itens do Pedido', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 14)),
               pw.SizedBox(height: 10),
               _buildItemsTable(itens),
-
               pw.Spacer(),
-
-              // --- TOTAIS E OBSERVAÇÕES ---
-              pw.Row(
-                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                children: [
-                  pw.Expanded(
-                    child: pw.Column(
-                       crossAxisAlignment: pw.CrossAxisAlignment.start,
-                       children: [
-                         pw.Text('Observações:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
-                         pw.Text(pedidoData['obs'] ?? 'Sem observações.'),
-                       ]
-                    ),
-                  ),
-                  pw.SizedBox(width: 20),
-                   pw.Text(
-                    'Total: R\$ ${pedidoData['total']?.toStringAsFixed(2) ?? '0.00'}',
-                    style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 18),
-                  ),
-                ]
+              // Totais (Observações Removidas)
+              pw.Align(
+                alignment: pw.Alignment.centerRight,
+                child: pw.Text(
+                  'Total: R\$ ${pedidoData['total']?.toStringAsFixed(2) ?? '0.00'}',
+                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 18),
+                ),
               ),
-               // --- CORREÇÃO DE PARÂMETRO E FORMATO DE DATA ---
               pw.Padding(
                 padding: const pw.EdgeInsets.only(top: 20),
                 child: pw.Divider(),
               ),
-              pw.Center(child: pw.Text('Conecta Vendas - Gerado em ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}')),
+              pw.Center(child: pw.Text('Order to Smile - Gerado em ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}')),
             ],
           );
         },
       ),
     );
-
-    // --- ABRIR A TELA DE IMPRESSÃO ---
-    await Printing.layoutPdf(onLayout: (PdfPageFormat format) async => pdf.save());
+    return pdf.save();
   }
 
   static pw.Widget _buildDetailRow(String title, String value) {
@@ -147,7 +127,6 @@ class PdfService {
 
   static pw.Table _buildItemsTable(List<ItemPedido> itens) {
     final headers = ['Cód.', 'Descrição', 'Qtd', 'Desc. %', 'Total'];
-
     final data = itens.map((item) {
       return [
         item.cod,
@@ -157,7 +136,6 @@ class PdfService {
         'R\$ ${item.valorFinal.toStringAsFixed(2)}',
       ];
     }).toList();
-
     return pw.Table.fromTextArray(
       headers: headers,
       data: data,
@@ -182,3 +160,4 @@ class PdfService {
     );
   }
 }
+

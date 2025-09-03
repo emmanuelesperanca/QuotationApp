@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../api_service.dart';
 import '../database.dart';
 
 class AppDataNotifier with ChangeNotifier {
@@ -10,7 +11,10 @@ class AppDataNotifier with ChangeNotifier {
   DateTime? _lastProductSync;
   DateTime? _lastEnderecoSync;
   bool _isSyncing = false;
+  bool _isSyncCancelled = false;
+  double _syncProgress = 0.0;
   String _syncMessage = '';
+
   Timer? _syncTimer;
 
   AppDataNotifier(this.database) {
@@ -19,25 +23,28 @@ class AppDataNotifier with ChangeNotifier {
     _startAutoSyncTimer();
   }
 
+  // Getters
   int get pendingOrderCount => _pendingOrderCount;
   DateTime? get lastClientSync => _lastClientSync;
   DateTime? get lastProductSync => _lastProductSync;
   DateTime? get lastEnderecoSync => _lastEnderecoSync;
   bool get isSyncing => _isSyncing;
+  double get syncProgress => _syncProgress;
   String get syncMessage => _syncMessage;
-
-  void _startAutoSyncTimer() {
-    // A cada hora, aciona a sincronização de todas as bases
-    _syncTimer = Timer.periodic(const Duration(hours: 1), (timer) {
-      debugPrint("--- Acionando sincronização automática horária ---");
-      syncAllBasesSilently();
-    });
-  }
 
   @override
   void dispose() {
     _syncTimer?.cancel();
     super.dispose();
+  }
+
+  void _startAutoSyncTimer() {
+    _syncTimer = Timer.periodic(const Duration(hours: 1), (timer) {
+      debugPrint("--- Disparando sincronização automática horária ---");
+      syncClientesFromAPI();
+      syncProdutosFromAPI();
+      syncEnderecosFromAPI();
+    });
   }
 
   Future<void> _loadSyncDates() async {
@@ -57,99 +64,175 @@ class AppDataNotifier with ChangeNotifier {
     notifyListeners();
   }
   
-  void _updateSyncMessage(String message) {
-    _syncMessage = message;
+  void cancelSync() {
+    if (_isSyncing) {
+      _isSyncCancelled = true;
+      debugPrint("--- Solicitação de cancelamento de sincronização recebida ---");
+    }
+  }
+
+  Future<bool> syncClientesFromAPI() async {
+    if (_isSyncing) return false;
+    
+    _isSyncing = true;
+    _isSyncCancelled = false;
+    _syncProgress = 0.0;
+    _syncMessage = "A iniciar sincronização de clientes...";
     notifyListeners();
-  }
 
-  Future<bool> syncClientesOnline({bool silent = false}) async {
-    if (!silent) {
-      _isSyncing = true;
-      _updateSyncMessage('A iniciar sincronização de clientes...');
-    }
     try {
-      void updateCallback(int count) {
-        if (!silent) _updateSyncMessage('Clientes sincronizados: $count');
+      final List<Map<String, dynamic>> allData = [];
+      int skip = 0;
+      const int batchSize = 2048;
+      const int totalApprox = 160000;
+
+      while (true) {
+        if (_isSyncCancelled) throw Exception("Sincronização cancelada pelo utilizador.");
+
+        _syncMessage = "A buscar clientes... (${allData.length}/~$totalApprox)";
+        _syncProgress = allData.length / totalApprox;
+        notifyListeners();
+
+        final List<dynamic>? batch = await ApiService.getBaseData('clientes', skip);
+
+        if (batch == null) throw Exception("Falha ao buscar dados da API.");
+        
+        allData.addAll(batch.cast<Map<String, dynamic>>());
+
+        if (batch.length < batchSize) break;
+        skip += batchSize;
       }
-      await database.populateClientesFromAPI(updateCallback);
-      final now = DateTime.now();
-      _lastClientSync = now;
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt('lastClientSync', now.millisecondsSinceEpoch);
-      return true;
+      
+      _syncMessage = "A processar e guardar ${allData.length} clientes na base de dados...";
+      notifyListeners();
+
+      if (!_isSyncCancelled) {
+        await database.populateClientesFromAPI(allData);
+        final now = DateTime.now();
+        _lastClientSync = now;
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setInt('lastClientSync', now.millisecondsSinceEpoch);
+        return true;
+      }
+      return false;
     } catch (e) {
-      debugPrint("Erro ao sincronizar clientes online: $e");
+      debugPrint("Erro durante a sincronização de clientes: $e");
       return false;
     } finally {
-      if (!silent) {
-        _isSyncing = false;
-        _updateSyncMessage('');
-      }
+      _isSyncing = false;
+      _syncMessage = '';
+      _syncProgress = 0.0;
+      notifyListeners();
     }
   }
+  
+  Future<bool> syncProdutosFromAPI() async {
+    if (_isSyncing) return false;
 
-  Future<bool> syncProdutosOnline({bool silent = false}) async {
-    if (!silent) {
-      _isSyncing = true;
-      _updateSyncMessage('A iniciar sincronização de produtos...');
-    }
+    _isSyncing = true;
+    _isSyncCancelled = false;
+    _syncProgress = 0.0;
+    _syncMessage = "A iniciar sincronização de produtos...";
+    notifyListeners();
+    
     try {
-      void updateCallback(int count) {
-        if (!silent) _updateSyncMessage('Produtos sincronizados: $count');
+      final List<Map<String, dynamic>> allData = [];
+      int skip = 0;
+      const int batchSize = 2048;
+      const int totalApprox = 20000;
+
+      while (true) {
+        if (_isSyncCancelled) throw Exception("Sincronização cancelada pelo utilizador.");
+
+        _syncMessage = "A buscar produtos... (${allData.length}/~$totalApprox)";
+        _syncProgress = allData.length / totalApprox;
+        notifyListeners();
+
+        final List<dynamic>? batch = await ApiService.getBaseData('produtos', skip);
+        if (batch == null) throw Exception("Falha ao buscar dados da API.");
+
+        allData.addAll(batch.cast<Map<String, dynamic>>());
+
+        if (batch.length < batchSize) break;
+        skip += batchSize;
       }
-      await database.populateProdutosFromAPI(updateCallback);
-      final now = DateTime.now();
-      _lastProductSync = now;
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt('lastProductSync', now.millisecondsSinceEpoch);
-      return true;
+      
+      _syncMessage = "A processar e guardar ${allData.length} produtos...";
+      notifyListeners();
+
+      if (!_isSyncCancelled) {
+        await database.populateProdutosFromAPI(allData);
+        final now = DateTime.now();
+        _lastProductSync = now;
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setInt('lastProductSync', now.millisecondsSinceEpoch);
+        return true;
+      }
+      return false;
     } catch (e) {
-      debugPrint("Erro ao sincronizar produtos online: $e");
+      debugPrint("Erro durante a sincronização de produtos: $e");
       return false;
     } finally {
-      if (!silent) {
-        _isSyncing = false;
-        _updateSyncMessage('');
-      }
+      _isSyncing = false;
+      _syncMessage = '';
+      _syncProgress = 0.0;
+      notifyListeners();
     }
   }
 
-  Future<bool> syncEnderecosOnline({bool silent = false}) async {
-    if (!silent) {
-      _isSyncing = true;
-      _updateSyncMessage('A iniciar sincronização de endereços...');
-    }
+  Future<bool> syncEnderecosFromAPI() async {
+    if (_isSyncing) return false;
+
+    _isSyncing = true;
+    _isSyncCancelled = false;
+    _syncProgress = 0.0;
+    _syncMessage = "A iniciar sincronização de endereços...";
+    notifyListeners();
+
     try {
-      void updateCallback(int count) {
-        if (!silent) _updateSyncMessage('Endereços sincronizados: $count');
+      final List<Map<String, dynamic>> allData = [];
+      int skip = 0;
+      const int batchSize = 2048;
+      const int totalApprox = 100000;
+
+      while (true) {
+        if (_isSyncCancelled) throw Exception("Sincronização cancelada pelo utilizador.");
+
+        _syncMessage = "A buscar endereços... (${allData.length}/~$totalApprox)";
+        _syncProgress = allData.length / totalApprox;
+        notifyListeners();
+        
+        final List<dynamic>? batch = await ApiService.getBaseData('enderecos', skip);
+        if (batch == null) throw Exception("Falha ao buscar dados da API.");
+        
+        allData.addAll(batch.cast<Map<String, dynamic>>());
+
+        if (batch.length < batchSize) break;
+        skip += batchSize;
       }
-      await database.populateEnderecosFromAPI(updateCallback);
-      final now = DateTime.now();
-      _lastEnderecoSync = now;
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setInt('lastEnderecoSync', now.millisecondsSinceEpoch);
-      return true;
+      
+      _syncMessage = "A processar e guardar ${allData.length} endereços...";
+      notifyListeners();
+
+      if (!_isSyncCancelled) {
+        await database.populateEnderecosFromAPI(allData);
+        final now = DateTime.now();
+        _lastEnderecoSync = now;
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setInt('lastEnderecoSync', now.millisecondsSinceEpoch);
+        return true;
+      }
+      return false;
     } catch (e) {
-      debugPrint("Erro ao sincronizar endereços online: $e");
+      debugPrint("Erro durante a sincronização de endereços: $e");
       return false;
     } finally {
-      if (!silent) {
-        _isSyncing = false;
-        _updateSyncMessage('');
-      }
+      _isSyncing = false;
+      _syncMessage = '';
+      _syncProgress = 0.0;
+      notifyListeners();
     }
   }
-
-  Future<void> syncAllBasesSilently() async {
-    debugPrint("Sincronizando clientes silenciosamente...");
-    await syncClientesOnline(silent: true);
-    debugPrint("Sincronizando produtos silenciosamente...");
-    await syncProdutosOnline(silent: true);
-    debugPrint("Sincronizando endereços silenciosamente...");
-    await syncEnderecosOnline(silent: true);
-    debugPrint("Sincronização silenciosa concluída.");
-  }
-
 
   Future<void> updatePendingOrderCount() async {
     _pendingOrderCount = await database.countPedidosPendentes();
