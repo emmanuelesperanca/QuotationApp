@@ -15,22 +15,12 @@ class TelaBaseProdutos extends StatefulWidget {
 
 class _TelaBaseProdutosState extends State<TelaBaseProdutos> {
   late Future<List<Produto>> _produtosFuture;
-  int _produtoCount = 0;
+  int _totalProdutos = 0;
 
   @override
   void initState() {
     super.initState();
     _refreshList();
-    _updateCount();
-  }
-  
-  void _updateCount() async {
-    final count = await widget.database.countProdutos();
-    if (mounted) {
-      setState(() {
-        _produtoCount = count;
-      });
-    }
   }
   
   void _refreshList() {
@@ -40,15 +30,24 @@ class _TelaBaseProdutosState extends State<TelaBaseProdutos> {
     });
   }
 
+  Future<void> _updateCount() async {
+    final count = await widget.database.countProdutos();
+    if (mounted) {
+      setState(() {
+        _totalProdutos = count;
+      });
+    }
+  }
+
   void _handleSync() async {
     final appData = Provider.of<AppDataNotifier>(context, listen: false);
     final success = await appData.syncProdutosOnline();
     if(mounted) {
       if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Base de produtos atualizada com sucesso!'), backgroundColor: Colors.green));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Base de produtos sincronizada com sucesso!'), backgroundColor: Colors.green));
         _refreshList();
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Falha ao atualizar a base. Verifique a conexão e tente novamente.'), backgroundColor: Colors.red));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erro ao atualizar a base. Verifique a sua ligação.'), backgroundColor: Colors.red));
       }
     }
   }
@@ -118,21 +117,26 @@ class _TelaBaseProdutosState extends State<TelaBaseProdutos> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Flexible(
+                     Expanded(
                       child: Text(
-                        lastSync != null
-                            ? 'Última atualização: ${DateFormat('dd/MM/yy HH:mm').format(lastSync)}  |  Total: $_produtoCount'
-                            : 'Nunca atualizado  |  Total: $_produtoCount',
+                        lastSync != null 
+                          ? 'Última atualização: ${DateFormat('dd/MM/yy HH:mm').format(lastSync)} ($_totalProdutos itens)' 
+                          : 'Nunca atualizado',
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     ElevatedButton.icon(
                       onPressed: appData.isSyncing ? null : _handleSync,
                       icon: appData.isSyncing ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2,)) : const Icon(Icons.sync),
-                      label: Text(appData.isSyncing ? appData.syncProgressMessage : 'Atualizar Base'),
+                      label: Text(appData.isSyncing ? 'A Sincronizar...' : 'Atualizar Base Online'),
                     )
                   ],
                 ),
+                 if (appData.isSyncing && appData.syncMessage.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8.0),
+                    child: Text(appData.syncMessage, style: const TextStyle(color: Colors.amber)),
+                  ),
               ],
             ),
           ),

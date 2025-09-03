@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../api_service.dart';
 import '../database.dart';
 
 class AppDataNotifier with ChangeNotifier {
@@ -72,7 +71,6 @@ class AppDataNotifier with ChangeNotifier {
       void updateCallback(int count) {
         if (!silent) _updateSyncMessage('Clientes sincronizados: $count');
       }
-      // CORREÇÃO: Removido o argumento 'batch' extra
       await database.populateClientesFromAPI(updateCallback);
       final now = DateTime.now();
       _lastClientSync = now;
@@ -99,7 +97,6 @@ class AppDataNotifier with ChangeNotifier {
       void updateCallback(int count) {
         if (!silent) _updateSyncMessage('Produtos sincronizados: $count');
       }
-      // CORREÇÃO: Removido o argumento 'batch' extra
       await database.populateProdutosFromAPI(updateCallback);
       final now = DateTime.now();
       _lastProductSync = now;
@@ -126,7 +123,6 @@ class AppDataNotifier with ChangeNotifier {
       void updateCallback(int count) {
         if (!silent) _updateSyncMessage('Endereços sincronizados: $count');
       }
-      // CORREÇÃO: Removido o argumento 'batch' extra
       await database.populateEnderecosFromAPI(updateCallback);
       final now = DateTime.now();
       _lastEnderecoSync = now;

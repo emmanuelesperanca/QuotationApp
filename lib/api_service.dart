@@ -4,8 +4,8 @@ import 'package:flutter/foundation.dart';
 
 class ApiService {
   // --- URLs ---
-  static const String _postOrderUrl = 'https://prod-50.westeurope.logic.azure.com:443/workflows/e273fbdc9d274955b78906f65fabc86a/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=57sZ3srSrWagjZjlRv33ptPHxmiLQFlGv-4Mo8DnHIo';
-  static const String _getStatusUrl = 'https://prod-241.westeurope.logic.azure.com:443/workflows/fdde305be31447cd9fefcde5d10c4370/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=qZORIZG7DhtnnxBdwkb3VusxXbW_jg6hBTC0Fbx6pOM';
+  static const String _postOrderUrl = 'https://default1900aa23cb5a4a458ad0968d229e95.5f.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/e273fbdc9d274955b78906f65fabc86a/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=v_aigLTHclVVWcZ6eHyRwFAuw4Un6qzBCFW_2tWy7p0';
+  static const String _getStatusUrl = 'https://default1900aa23cb5a4a458ad0968d229e95.5f.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/fdde305be31447cd9fefcde5d10c4370/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=l6pfUfkHUdc55VDK-5V0x6Y46m3Ce2uYesa8kirfZdE';
   static const String _getBaseDataUrl = 'https://default1900aa23cb5a4a458ad0968d229e95.5f.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/0350ab1197f944228fbd1f92bc14fb37/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=GWf97mW7xduKqEC4owLSI93T48B8ye6K-YO34sS66R0';
   static const String _postAnalyticsUrl = 'https://default1900aa23cb5a4a458ad0968d229e95.5f.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/3ebbaa398f4c41288bfa2918425e4fa9/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=WzfQSg_I566NsagX8hgM7VdfFFUs4zPmpGJhMnjaZJM';
 
