@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../api_service.dart';
 import '../database.dart';
 
 class AppDataNotifier with ChangeNotifier {
@@ -7,19 +9,37 @@ class AppDataNotifier with ChangeNotifier {
   int _pendingOrderCount = 0;
   DateTime? _lastClientSync;
   DateTime? _lastProductSync;
-  DateTime? _lastEnderecoSync; // ADICIONADO
+  DateTime? _lastEnderecoSync;
   bool _isSyncing = false;
+  String _syncMessage = '';
+  Timer? _syncTimer;
 
   AppDataNotifier(this.database) {
     updatePendingOrderCount();
     _loadSyncDates();
+    _startAutoSyncTimer();
   }
 
   int get pendingOrderCount => _pendingOrderCount;
   DateTime? get lastClientSync => _lastClientSync;
   DateTime? get lastProductSync => _lastProductSync;
-  DateTime? get lastEnderecoSync => _lastEnderecoSync; // ADICIONADO
+  DateTime? get lastEnderecoSync => _lastEnderecoSync;
   bool get isSyncing => _isSyncing;
+  String get syncMessage => _syncMessage;
+
+  void _startAutoSyncTimer() {
+    // A cada hora, aciona a sincronização de todas as bases
+    _syncTimer = Timer.periodic(const Duration(hours: 1), (timer) {
+      debugPrint("--- Acionando sincronização automática horária ---");
+      syncAllBasesSilently();
+    });
+  }
+
+  @override
+  void dispose() {
+    _syncTimer?.cancel();
+    super.dispose();
+  }
 
   Future<void> _loadSyncDates() async {
     final prefs = await SharedPreferences.getInstance();
@@ -31,74 +51,113 @@ class AppDataNotifier with ChangeNotifier {
     if (productMillis != null) {
       _lastProductSync = DateTime.fromMillisecondsSinceEpoch(productMillis);
     }
-    // ADICIONADO
     final enderecoMillis = prefs.getInt('lastEnderecoSync');
     if (enderecoMillis != null) {
       _lastEnderecoSync = DateTime.fromMillisecondsSinceEpoch(enderecoMillis);
     }
     notifyListeners();
   }
-
-  Future<bool> syncClientesFromCsv() async {
-    _isSyncing = true;
+  
+  void _updateSyncMessage(String message) {
+    _syncMessage = message;
     notifyListeners();
+  }
+
+  Future<bool> syncClientesOnline({bool silent = false}) async {
+    if (!silent) {
+      _isSyncing = true;
+      _updateSyncMessage('A iniciar sincronização de clientes...');
+    }
     try {
-      await database.populateClientesFromCsv();
+      void updateCallback(int count) {
+        if (!silent) _updateSyncMessage('Clientes sincronizados: $count');
+      }
+      // CORREÇÃO: Removido o argumento 'batch' extra
+      await database.populateClientesFromAPI(updateCallback);
       final now = DateTime.now();
       _lastClientSync = now;
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt('lastClientSync', now.millisecondsSinceEpoch);
       return true;
     } catch (e) {
-      debugPrint("Erro ao carregar clientes do CSV: $e");
+      debugPrint("Erro ao sincronizar clientes online: $e");
       return false;
     } finally {
-      _isSyncing = false;
-      notifyListeners();
+      if (!silent) {
+        _isSyncing = false;
+        _updateSyncMessage('');
+      }
     }
   }
-  
-  Future<bool> syncProdutosFromCsv() async {
-    _isSyncing = true;
-    notifyListeners();
+
+  Future<bool> syncProdutosOnline({bool silent = false}) async {
+    if (!silent) {
+      _isSyncing = true;
+      _updateSyncMessage('A iniciar sincronização de produtos...');
+    }
     try {
-      await database.populateProdutosFromCsv();
+      void updateCallback(int count) {
+        if (!silent) _updateSyncMessage('Produtos sincronizados: $count');
+      }
+      // CORREÇÃO: Removido o argumento 'batch' extra
+      await database.populateProdutosFromAPI(updateCallback);
       final now = DateTime.now();
       _lastProductSync = now;
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt('lastProductSync', now.millisecondsSinceEpoch);
       return true;
     } catch (e) {
-      debugPrint("Erro ao carregar produtos do CSV: $e");
+      debugPrint("Erro ao sincronizar produtos online: $e");
       return false;
     } finally {
-      _isSyncing = false;
-      notifyListeners();
+      if (!silent) {
+        _isSyncing = false;
+        _updateSyncMessage('');
+      }
     }
   }
 
-  // ADICIONADO: Nova função para sincronizar os endereços
-  Future<bool> syncEnderecosFromCsv() async {
-    _isSyncing = true;
-    notifyListeners();
+  Future<bool> syncEnderecosOnline({bool silent = false}) async {
+    if (!silent) {
+      _isSyncing = true;
+      _updateSyncMessage('A iniciar sincronização de endereços...');
+    }
     try {
-      await database.populateEnderecosFromCsv();
+      void updateCallback(int count) {
+        if (!silent) _updateSyncMessage('Endereços sincronizados: $count');
+      }
+      // CORREÇÃO: Removido o argumento 'batch' extra
+      await database.populateEnderecosFromAPI(updateCallback);
       final now = DateTime.now();
       _lastEnderecoSync = now;
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt('lastEnderecoSync', now.millisecondsSinceEpoch);
       return true;
     } catch (e) {
-      debugPrint("Erro ao carregar endereços do CSV: $e");
+      debugPrint("Erro ao sincronizar endereços online: $e");
       return false;
     } finally {
-      _isSyncing = false;
-      notifyListeners();
+      if (!silent) {
+        _isSyncing = false;
+        _updateSyncMessage('');
+      }
     }
   }
+
+  Future<void> syncAllBasesSilently() async {
+    debugPrint("Sincronizando clientes silenciosamente...");
+    await syncClientesOnline(silent: true);
+    debugPrint("Sincronizando produtos silenciosamente...");
+    await syncProdutosOnline(silent: true);
+    debugPrint("Sincronizando endereços silenciosamente...");
+    await syncEnderecosOnline(silent: true);
+    debugPrint("Sincronização silenciosa concluída.");
+  }
+
 
   Future<void> updatePendingOrderCount() async {
     _pendingOrderCount = await database.countPedidosPendentes();
     notifyListeners();
   }
 }
+

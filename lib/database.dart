@@ -1,14 +1,15 @@
+import 'dart:convert';
 import 'package:drift/drift.dart';
-import 'package:flutter/foundation.dart'; 
-import 'package:flutter/services.dart' show rootBundle;
-import 'package:csv/csv.dart';
+import 'package:flutter/foundation.dart';
+import 'package:collection/collection.dart';
+import 'models/item_pedido.dart';
 
 // Importa o conector de forma condicional.
 import 'connection/native.dart' if (dart.library.html) 'connection/web.dart';
 
 part 'database.g.dart';
 
-// --- DEFINIÇÃO DAS TABELAS ---
+// --- DEFINIÇÃO DAS TABELAS (sem alterações) ---
 @DataClassName('Cliente')
 class Clientes extends Table {
   IntColumn get id => integer().autoIncrement()();
@@ -29,7 +30,6 @@ class EnderecosAlternativos extends Table {
   TextColumn get numeroCliente => text().named('NumeroCliente')();
   TextColumn get enderecoFormatado => text().named('EnderecoFormatado')();
 }
-
 
 @DataClassName('PreCadastro')
 class PreCadastros extends Table {
@@ -61,13 +61,20 @@ class PedidosPendentes extends Table {
 @DataClassName('PedidoEnviado')
 class PedidosEnviados extends Table {
   IntColumn get id => integer().autoIncrement()();
-  // CORRIGIDO: A restrição .unique() foi removida para permitir a migração.
   TextColumn get appPedidoId => text().nullable()(); 
   TextColumn get pedidoJson => text()();
   DateTimeColumn get dataEnvio => dateTime()();
   TextColumn get numeroPedidoSap => text().nullable()();
   TextColumn get status => text().nullable()();
   TextColumn get obsCentral => text().nullable()();
+}
+
+// --- Classes auxiliares para o Dashboard ---
+class RankingItem {
+  final String nome;
+  final String id;
+  final int contagem;
+  RankingItem({required this.nome, required this.id, required this.contagem});
 }
 
 
@@ -83,9 +90,7 @@ class AppDatabase extends _$AppDatabase {
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) async {
       await m.createAll();
-      debugPrint("--- Tabelas da base de dados criadas. A popular com dados dos CSVs... ---");
-      await _populateDbFromCsv(this);
-      debugPrint("--- Base de dados populada com sucesso! ---");
+      debugPrint("--- Tabelas da base de dados criadas. ---");
     },
     onUpgrade: (m, from, to) async {
       if (from < 2) {
@@ -108,6 +113,26 @@ class AppDatabase extends _$AppDatabase {
       }
     }
   );
+
+  // --- MÉTODOS DE CONTAGEM ---
+  Future<int> countClientes() async {
+    final count = clientes.id.count();
+    final query = selectOnly(clientes)..addColumns([count]);
+    return await query.map((row) => row.read(count) ?? 0).getSingle();
+  }
+
+  Future<int> countProdutos() async {
+    final count = produtos.id.count();
+    final query = selectOnly(produtos)..addColumns([count]);
+    return await query.map((row) => row.read(count) ?? 0).getSingle();
+  }
+
+  Future<int> countEnderecos() async {
+    final count = enderecosAlternativos.id.count();
+    final query = selectOnly(enderecosAlternativos)..addColumns([count]);
+    return await query.map((row) => row.read(count) ?? 0).getSingle();
+  }
+
 
   // --- MÉTODOS DE CLIENTE ---
   Future<List<Cliente>> getTodosClientes() => select(clientes).get();
@@ -150,7 +175,6 @@ class AppDatabase extends _$AppDatabase {
       batch.insertAll(enderecosAlternativos, novosEnderecos, mode: InsertMode.insertOrReplace);
     });
   }
-
 
   // --- MÉTODOS DE PRODUTO ---
   Future<Produto?> getProdutoPorCod(String cod) {
@@ -214,86 +238,175 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> apagarTodosPedidosEnviados() => delete(pedidosEnviados).go();
   Future<void> apagarTodosPedidosPendentes() => delete(pedidosPendentes).go();
-
-  Future<void> populateClientesFromCsv() async {
+  
+  // --- MÉTODOS DE POPULAÇÃO VIA API ---
+  Future<void> populateClientesFromApi(List<dynamic> data) async {
     await apagarTodosClientes();
     try {
-      final clientesCsvString = await rootBundle.loadString('assets/csv/clientes.csv');
-      final clientesRows = const CsvToListConverter(fieldDelimiter: ';').convert(clientesCsvString, eol: '\n');
-      
-      final clientesCompanions = <ClientesCompanion>[];
-      for (var i = 1; i < clientesRows.length; i++) {
-        final row = clientesRows[i];
-        if (row.length < 15) continue;
-        clientesCompanions.add(ClientesCompanion.insert(
-          numeroCliente: row[0].toString(),
-          cpfCnpj: Value(row[1].toString().isNotEmpty ? row[1].toString() : row[2].toString()),
-          nome: row[3].toString(),
-          enderecoCompleto: Value('${row[5]} ${row[6]}, ${row[9]} - ${row[8]}'),
-          telefone1: Value(row[11].toString()),
-          telefone2: Value(row[12].toString()),
-          email: Value(row[14].toString()),
-        ));
+      final companions = <ClientesCompanion>[];
+      for (var item in data) {
+        if (item is Map<String, dynamic>) {
+          final endereco = '${item['Rua'] ?? ''}, ${item['NumeroEndereco'] ?? ''} - ${item['Bairro'] ?? ''}, ${item['Cidade'] ?? ''}';
+          companions.add(ClientesCompanion.insert(
+            numeroCliente: item['NumeroCliente']?.toString() ?? '',
+            cpfCnpj: Value(item['CPF']?.toString()), 
+            nome: item['Nome1']?.toString() ?? 'Nome não informado', 
+            enderecoCompleto: Value(endereco),
+            telefone1: Value(item['Telefone1']?.toString()),
+            telefone2: Value(item['Telefone2']?.toString()),
+            email: Value(item['Email']?.toString()),
+          ));
+        }
       }
-      await inserirClientesEmMassa(clientesCompanions);
-      debugPrint("${clientesCompanions.length} clientes inseridos a partir do CSV.");
+      await inserirClientesEmMassa(companions);
+      debugPrint("${companions.length} clientes inseridos via API.");
     } catch (e) {
-      debugPrint("Erro ao carregar clientes.csv: $e.");
+      debugPrint("Erro ao processar dados da API de clientes: $e");
       rethrow;
     }
   }
 
-  Future<void> populateProdutosFromCsv() async {
+  Future<void> populateProdutosFromApi(List<dynamic> data) async {
     await apagarTodosProdutos();
     try {
-      final produtosCsvString = await rootBundle.loadString('assets/csv/produtos.csv');
-      final produtosRows = const CsvToListConverter(fieldDelimiter: ';').convert(produtosCsvString, eol: '\n');
-
-      final produtosCompanions = <ProdutosCompanion>[];
-      for (var i = 1; i < produtosRows.length; i++) {
-        final row = produtosRows[i];
-        if (row.length < 3) continue;
-        produtosCompanions.add(ProdutosCompanion.insert(
-          referencia: row[0].toString(),
-          descricao: row[1].toString(),
-          valor: double.tryParse(row[2].toString().replaceAll(',', '.')) ?? 0.0,
-        ));
+      final companions = <ProdutosCompanion>[];
+      for (var item in data) {
+        if (item is Map<String, dynamic>) {
+          companions.add(ProdutosCompanion.insert(
+            referencia: item['Referencia']?.toString() ?? '',
+            descricao: item['Descricao']?.toString() ?? 'Descrição não informada',
+            valor: double.tryParse(item['Valor']?.toString().replaceAll(',', '.') ?? '0.0') ?? 0.0,
+          ));
+        }
       }
-      await inserirProdutosEmMassa(produtosCompanions);
-      debugPrint("${produtosCompanions.length} produtos inseridos a partir do CSV.");
+      await inserirProdutosEmMassa(companions);
+      debugPrint("${companions.length} produtos inseridos via API.");
     } catch (e) {
-      debugPrint("Erro ao carregar produtos.csv: $e.");
+      debugPrint("Erro ao processar dados da API de produtos: $e");
       rethrow;
     }
   }
-  
-  Future<void> populateEnderecosFromCsv() async {
+
+  Future<void> populateEnderecosFromApi(List<dynamic> data) async {
     await apagarTodosEnderecos();
     try {
-      final csvString = await rootBundle.loadString('assets/csv/enderecos_alternativos.csv');
-      final rows = const CsvToListConverter(fieldDelimiter: ';').convert(csvString, eol: '\n');
-      
       final companions = <EnderecosAlternativosCompanion>[];
-      for (var i = 1; i < rows.length; i++) {
-        final row = rows[i];
-        if (row.length < 11) continue;
-        companions.add(EnderecosAlternativosCompanion.insert(
-          cpfCnpj: row[0].toString().isNotEmpty ? row[0].toString() : row[1].toString(),
-          numeroCliente: row[2].toString(),
-          enderecoFormatado: '${row[5]} ${row[6]}, ${row[9]} - ${row[8]}',
-        ));
+      for (var item in data) {
+        if (item is Map<String, dynamic>) {
+          final endereco = '${item['Rua'] ?? ''}, ${item['NumeroEndereco'] ?? ''} - ${item['Bairro'] ?? ''}, ${item['Cidade'] ?? ''}';
+          companions.add(EnderecosAlternativosCompanion.insert(
+            cpfCnpj: item['CPF']?.toString() ?? '', 
+            numeroCliente: item['NumeroCliente']?.toString() ?? '',
+            enderecoFormatado: endereco,
+          ));
+        }
       }
       await inserirEnderecosEmMassa(companions);
-      debugPrint("${companions.length} endereços alternativos inseridos do CSV.");
+      debugPrint("${companions.length} endereços inseridos via API.");
     } catch (e) {
-      debugPrint("Erro ao carregar enderecos_alternativos.csv: $e.");
+      debugPrint("Erro ao processar dados da API de endereços: $e");
       rethrow;
     }
   }
-}
 
-Future<void> _populateDbFromCsv(AppDatabase db) async {
-  await db.populateClientesFromCsv();
-  await db.populateProdutosFromCsv();
-  await db.populateEnderecosFromCsv();
+  // --- MÉTODOS PARA O DASHBOARD ---
+  Future<int> countPedidosEnviados() async {
+    final count = pedidosEnviados.id.count();
+    final query = selectOnly(pedidosEnviados)..addColumns([count]);
+    return await query.map((row) => row.read(count) ?? 0).getSingle();
+  }
+
+  Future<double> sumTotalPedidosEnviados() async {
+    final pedidos = await getTodosPedidosEnviados();
+    double total = 0.0;
+    for (var pedido in pedidos) {
+      try {
+        final data = jsonDecode(pedido.pedidoJson);
+        total += (data['total'] as num?)?.toDouble() ?? 0.0;
+      } catch (e) {
+        debugPrint("Erro ao decodificar JSON do pedido para somar total: $e");
+      }
+    }
+    return total;
+  }
+
+  Future<List<RankingItem>> getTopProdutosVendidos(int limit) async {
+    final pedidos = await getTodosPedidosEnviados();
+    final Map<String, int> productCount = {};
+    final Map<String, String> productNames = {};
+
+    for (var pedido in pedidos) {
+      try {
+        final data = jsonDecode(pedido.pedidoJson);
+        final List<dynamic> itensJson = (data['itens'] is String)
+            ? jsonDecode(data['itens'])
+            : data['itens'];
+        
+        for (var itemData in itensJson) {
+          final item = ItemPedido.fromJson(itemData);
+          productCount.update(item.cod, (value) => value + item.qtd, ifAbsent: () => item.qtd);
+          if (!productNames.containsKey(item.cod)) {
+            productNames[item.cod] = item.descricao;
+          }
+        }
+      } catch (e) {
+        debugPrint("Erro ao decodificar JSON para ranking de produtos: $e");
+      }
+    }
+
+    final sortedProducts = productCount.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    return sortedProducts
+        .take(limit)
+        .map((e) => RankingItem(id: e.key, nome: productNames[e.key] ?? e.key, contagem: e.value))
+        .toList();
+  }
+
+  Future<List<RankingItem>> getTopClientes(int limit) async {
+    final pedidos = await getTodosPedidosEnviados();
+    final Map<String, int> clientOrderCount = {};
+    final Map<String, String> clientNames = {};
+     for (var pedido in pedidos) {
+      try {
+        final data = jsonDecode(pedido.pedidoJson);
+        final clientId = data['cod_cliente']?.toString();
+        if (clientId != null) {
+          clientOrderCount.update(clientId, (value) => value + 1, ifAbsent: () => 1);
+          if (!clientNames.containsKey(clientId)) {
+             clientNames[clientId] = data['cliente']?.toString() ?? clientId;
+          }
+        }
+      } catch (e) {
+        debugPrint("Erro ao decodificar JSON para ranking de clientes: $e");
+      }
+    }
+    final sortedClients = clientOrderCount.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    return sortedClients
+        .take(limit)
+        .map((e) => RankingItem(id: e.key, nome: clientNames[e.key] ?? e.key, contagem: e.value))
+        .toList();
+  }
+
+  Future<Map<DateTime, int>> getPedidosNosUltimosDias(int days) async {
+    final now = DateTime.now();
+    final startDate = DateTime(now.year, now.month, now.day).subtract(Duration(days: days - 1));
+    
+    final query = select(pedidosEnviados)..where((p) => p.dataEnvio.isBiggerOrEqualValue(startDate));
+    final pedidos = await query.get();
+
+    final Map<DateTime, int> dailyCounts = {};
+    for (int i = 0; i < days; i++) {
+      dailyCounts[startDate.add(Duration(days: i))] = 0;
+    }
+
+    for (var pedido in pedidos) {
+      final dateOnly = DateTime(pedido.dataEnvio.year, pedido.dataEnvio.month, pedido.dataEnvio.day);
+      dailyCounts.update(dateOnly, (value) => value + 1, ifAbsent: () => 1);
+    }
+    return dailyCounts;
+  }
+
 }

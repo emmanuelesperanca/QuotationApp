@@ -14,28 +14,40 @@ class TelaBaseClientes extends StatefulWidget {
 
 class _TelaBaseClientesState extends State<TelaBaseClientes> {
   late Future<List<Cliente>> _clientesFuture;
+  int _clienteCount = 0;
 
   @override
   void initState() {
     super.initState();
     _refreshList();
+    _updateCount();
+  }
+
+  void _updateCount() async {
+    final count = await widget.database.countClientes();
+    if (mounted) {
+      setState(() {
+        _clienteCount = count;
+      });
+    }
   }
 
   void _refreshList() {
     setState(() {
       _clientesFuture = widget.database.getTodosClientes();
+      _updateCount();
     });
   }
 
   void _handleSync() async {
     final appData = Provider.of<AppDataNotifier>(context, listen: false);
-    final success = await appData.syncClientesFromCsv();
-    if(mounted) {
+    final success = await appData.syncClientesOnline();
+    if (mounted) {
       if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Base de clientes carregada com sucesso!'), backgroundColor: Colors.green));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Base de clientes atualizada com sucesso!'), backgroundColor: Colors.green));
         _refreshList();
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Falha ao carregar o ficheiro CSV.'), backgroundColor: Colors.red));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Falha ao atualizar a base. Verifique a conexão e tente novamente.'), backgroundColor: Colors.red));
       }
     }
   }
@@ -105,11 +117,18 @@ class _TelaBaseClientesState extends State<TelaBaseClientes> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(lastSync != null ? 'Última atualização: ${DateFormat('dd/MM/yy HH:mm').format(lastSync)}' : 'Nunca atualizado'),
+                    Flexible(
+                      child: Text(
+                        lastSync != null
+                            ? 'Última atualização: ${DateFormat('dd/MM/yy HH:mm').format(lastSync)}  |  Total: $_clienteCount'
+                            : 'Nunca atualizado  |  Total: $_clienteCount',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                     ElevatedButton.icon(
                       onPressed: appData.isSyncing ? null : _handleSync,
-                      icon: appData.isSyncing ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2,)) : const Icon(Icons.upload_file),
-                      label: Text(appData.isSyncing ? 'A Carregar...' : 'Carregar do CSV'),
+                      icon: appData.isSyncing ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2,)) : const Icon(Icons.sync),
+                      label: Text(appData.isSyncing ? appData.syncProgressMessage : 'Atualizar Base'),
                     )
                   ],
                 ),
@@ -143,3 +162,4 @@ class _TelaBaseClientesState extends State<TelaBaseClientes> {
     );
   }
 }
+

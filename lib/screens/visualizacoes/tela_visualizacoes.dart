@@ -31,6 +31,11 @@ class TelaVisualizacoes extends StatelessWidget {
 
     // Lista dinâmica com as informações para cada cartão de navegação
     final List<VisualizacaoCardData> cards = [
+       VisualizacaoCardData(
+        title: 'Dashboard',
+        icon: Icons.dashboard,
+        routeName: '/dashboard',
+      ),
       VisualizacaoCardData(
         title: 'Pedidos Pendentes',
         icon: Icons.pending_actions,
@@ -72,13 +77,12 @@ class TelaVisualizacoes extends StatelessWidget {
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
-        // ATUALIZADO: Uso de GridView.builder com um delegate responsivo
         child: GridView.builder(
           gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-            maxCrossAxisExtent: 300.0, // Cada cartão pode ter uma largura máxima de 300 pixels
+            maxCrossAxisExtent: 300.0,
             crossAxisSpacing: 16.0,
             mainAxisSpacing: 16.0,
-            childAspectRatio: 1.2, // Mantém a proporção dos cartões
+            childAspectRatio: 1.2,
           ),
           itemCount: cards.length,
           itemBuilder: (context, index) {

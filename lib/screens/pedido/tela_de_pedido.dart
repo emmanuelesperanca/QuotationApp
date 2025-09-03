@@ -1,7 +1,10 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:order_simulator/api_service.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../../database.dart';
 import '../../models/item_pedido.dart';
@@ -46,6 +49,9 @@ class _TelaDePedidoState extends State<TelaDePedido> {
   EnderecoAlternativo? _enderecoAlternativoSelecionado;
   bool _mostrarCampoOutroEndereco = false;
 
+  String? _deviceUUID;
+  String _appVersion = '1.0.0';
+
   @override
   void initState() {
     super.initState();
@@ -53,6 +59,25 @@ class _TelaDePedidoState extends State<TelaDePedido> {
     _emailFocusNode.addListener(_showSapWarningIfNeeded);
     final auth = Provider.of<AuthNotifier>(context, listen: false);
     _codigoAssessorController.text = auth.username ?? '';
+    _loadDeviceInfo();
+  }
+
+  Future<void> _loadDeviceInfo() async {
+    // Carrega o UUID do dispositivo
+    final prefs = await SharedPreferences.getInstance();
+    String? uuid = prefs.getString('deviceUUID');
+    if (uuid == null) {
+      uuid = const Uuid().v4();
+      await prefs.setString('deviceUUID', uuid);
+    }
+    
+    // Carrega a versão do app
+    final packageInfo = await PackageInfo.fromPlatform();
+    
+    setState(() {
+      _deviceUUID = uuid;
+      _appVersion = packageInfo.version;
+    });
   }
 
   @override
@@ -142,6 +167,50 @@ class _TelaDePedidoState extends State<TelaDePedido> {
     }
   }
 
+  Future<void> _limparFormulario() async {
+    bool confirm = true;
+    if (_clienteSelecionado != null || _itensPedido.isNotEmpty) {
+      confirm = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Limpar Pedido'),
+          content: const Text('Tem a certeza de que deseja apagar todos os dados do pedido atual?'),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancelar')),
+            FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Limpar')),
+          ],
+        ),
+      ) ?? false;
+    }
+
+    if (confirm) {
+      setState(() {
+        _clienteSelecionado = null;
+        _buscarPreCadastro = false;
+        _usarEnderecoPrincipal = true;
+        _metodoPagamento = 'Pix';
+        _parcelasCartao = 1;
+        _itensPedido.clear();
+        _descontoControllers.forEach((c) => c.dispose());
+        _descontoControllers.clear();
+        _telefoneController.clear();
+        _emailController.clear();
+        _enderecoEntregaController.clear();
+        _promocodeController.clear();
+        _obsController.clear();
+        _hasShownSapWarning = false;
+        _retiraEstande = false;
+        _metodoDeEntrega = "Padrão";
+        _selectAllItems = false;
+        _descontoMassaController.clear();
+        _telefoneConfirmado = false;
+        _enderecosAlternativos.clear();
+        _enderecoAlternativoSelecionado = null;
+        _mostrarCampoOutroEndereco = false;
+      });
+    }
+  }
+
   Future<void> _mostrarConfirmacaoPedido() async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -206,30 +275,108 @@ class _TelaDePedidoState extends State<TelaDePedido> {
       "parcelas": (_metodoPagamento == 'Boleto' || _metodoPagamento == 'Cartão') ? '$_parcelasCartao x' : '1 x',
       "promocode": _promocodeController.text,
       "total": total,
-      "itens": jsonEncode(_itensPedido.map((item) => item.toJson()).toList()),
+      "itens": _itensPedido.map((item) => item.toJson()).toList(),
       "obs": _obsController.text,
       "pre-cadastro": _clienteSelecionado is PreCadastro ? _clienteSelecionado.preCadastro : '',
     };
-
-    final jsonString = jsonEncode(pedidoJson);
     
+    bool sucesso = false;
+    String motivoFalha = '';
+
     try {
       final response = await http.post(
         Uri.parse("https://prod-50.westeurope.logic.azure.com:443/workflows/e273fbdc9d274955b78906f65fabc86a/triggers/manual/paths/invoke?api-version=2016-06-01&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=57sZ3srSrWagjZjlRv33ptPHxmiLQFlGv-4Mo8DnHIo"),
         headers: {'Content-Type': 'application/json'},
-        body: jsonString,
+        body: jsonEncode(pedidoJson),
       ).timeout(const Duration(seconds: 15));
 
       if (response.statusCode >= 200 && response.statusCode < 300) {
-        await _salvarPedidoEnviado(jsonString, appPedidoId);
+        sucesso = true;
       } else {
-        await _salvarPedidoPendente(jsonString, 'Falha no servidor: ${response.statusCode}');
+        motivoFalha = 'Falha no servidor: ${response.statusCode}';
       }
     } catch (e) {
-      await _salvarPedidoPendente(jsonString, 'Erro de rede ou timeout');
+      motivoFalha = 'Erro de rede ou timeout';
+    }
+
+    // Enviar dados de análise independentemente do resultado do pedido principal
+    _enviarDadosAnaliticos(sucesso ? "PEDIDO_ENVIADO" : "PEDIDO_PENDENTE", appPedidoId, total);
+
+    if (sucesso) {
+      await _salvarPedidoEnviado(jsonEncode(pedidoJson), appPedidoId);
+      _limparFormularioAposEnvio();
+    } else {
+      await _salvarPedidoPendente(jsonEncode(pedidoJson), motivoFalha);
+      _limparFormularioAposEnvio();
     }
 
     setState(() => _isSending = false);
+  }
+
+  void _limparFormularioAposEnvio() {
+    setState(() {
+      _clienteSelecionado = null;
+      _buscarPreCadastro = false;
+      _usarEnderecoPrincipal = true;
+      _metodoPagamento = 'Pix';
+      _parcelasCartao = 1;
+      _itensPedido.clear();
+      _descontoControllers.forEach((c) => c.dispose());
+      _descontoControllers.clear();
+      _telefoneController.clear();
+      _emailController.clear();
+      _enderecoEntregaController.clear();
+      _promocodeController.clear();
+      _obsController.clear();
+      _hasShownSapWarning = false;
+      _retiraEstande = false;
+      _metodoDeEntrega = "Padrão";
+      _selectAllItems = false;
+      _descontoMassaController.clear();
+      _telefoneConfirmado = false;
+      _enderecosAlternativos.clear();
+      _enderecoAlternativoSelecionado = null;
+      _mostrarCampoOutroEndereco = false;
+    });
+  }
+
+  Future<void> _enviarDadosAnaliticos(String tipoEvento, String appPedidoId, double total) async {
+    final analyticsPayload = {
+      "transacao": {
+        "appPedidoUUID": appPedidoId,
+        "timestampPedido": DateTime.now().toUtc().toIso8601String(),
+        "vendedor": {
+          "codigoAssessor": _codigoAssessorController.text,
+        },
+        "dispositivo": {
+          "deviceUUID": _deviceUUID,
+        },
+        "cliente": {
+          "numeroClienteSAP": _clienteSelecionado!.numeroCliente,
+          "nome": _clienteSelecionado!.nome,
+        },
+        "pedido": {
+          "valorTotal": total,
+          "condicaoPagamento": _metodoPagamento,
+          "parcelas": _parcelasCartao,
+          "metodoEntrega": _metodoDeEntrega,
+          "promocode": _promocodeController.text,
+        },
+        "itens": _itensPedido.map((item) => {
+          "referencia": item.cod,
+          "quantidade": item.qtd,
+          "valorUnitario": item.valorUnitario,
+          "descontoPercentual": item.desconto,
+        }).toList(),
+      },
+      "evento": {
+        "tipo": tipoEvento,
+        "versaoApp": _appVersion,
+      }
+    };
+
+    // Envio em "fire-and-forget"
+    ApiService.enviarDadosAnaliticos(analyticsPayload);
   }
 
   Future<void> _salvarPedidoPendente(String json, String motivo) async {
@@ -255,7 +402,17 @@ class _TelaDePedidoState extends State<TelaDePedido> {
 
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: AppBar(title: const Text('Processar Pedido'), backgroundColor: Colors.black.withOpacity(0.5)),
+      appBar: AppBar(
+        title: const Text('Processar Pedido'), 
+        backgroundColor: Colors.black.withOpacity(0.5),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.cleaning_services),
+            onPressed: _limparFormulario,
+            tooltip: 'Limpar Pedido',
+          ),
+        ],
+      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -591,3 +748,4 @@ class _TelaDePedidoState extends State<TelaDePedido> {
     );
   }
 }
+

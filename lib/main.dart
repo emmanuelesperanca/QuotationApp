@@ -18,7 +18,7 @@ import 'screens/visualizacoes/tela_historico.dart';
 import 'screens/pedido/tela_lista_produtos.dart';
 import 'screens/visualizacoes/tela_base_pre_cadastro.dart';
 import 'screens/visualizacoes/tela_base_enderecos_alternativos.dart';
-
+import 'screens/visualizacoes/tela_dashboard.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -60,13 +60,14 @@ class MyApp extends StatelessWidget {
             '/pre_cadastro_cliente': (context) => TelaPreCadastroCliente(database: database),
             '/visualizacoes': (context) => TelaVisualizacoes(database: database),
             '/ajuda': (context) => const TelaAjuda(),
+            '/dashboard': (context) => TelaDashboard(database: database), // Rota para o Dashboard
             '/pedidos_pendentes': (context) => TelaPedidosPendentes(database: database),
             '/base_clientes': (context) => TelaBaseClientes(database: database),
             '/base_produtos': (context) => TelaBaseProdutos(database: database),
             '/historico': (context) => TelaHistorico(database: database),
             '/lista_produtos': (context) => TelaListaProdutos(database: database),
             '/base_pre_cadastro': (context) => TelaBasePreCadastro(database: database),
-            '/base_enderecos_alternativos': (context) => TelaBaseEnderecosAlternativos(database: database), // ATUALIZADO
+            '/base_enderecos_alternativos': (context) => TelaBaseEnderecosAlternativos(database: database),
           },
         );
       },

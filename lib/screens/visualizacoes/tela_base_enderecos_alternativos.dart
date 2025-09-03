@@ -14,29 +14,40 @@ class TelaBaseEnderecosAlternativos extends StatefulWidget {
 
 class _TelaBaseEnderecosAlternativosState extends State<TelaBaseEnderecosAlternativos> {
   late Future<List<EnderecoAlternativo>> _enderecosFuture;
+  int _enderecoCount = 0;
 
   @override
   void initState() {
     super.initState();
     _refreshList();
+    _updateCount();
+  }
+
+  void _updateCount() async {
+    final count = await widget.database.countEnderecos();
+    if (mounted) {
+      setState(() {
+        _enderecoCount = count;
+      });
+    }
   }
 
   void _refreshList() {
     setState(() {
       _enderecosFuture = widget.database.getTodosEnderecosAlternativos();
+       _updateCount();
     });
   }
 
   void _handleSync() async {
     final appData = Provider.of<AppDataNotifier>(context, listen: false);
-    // CORRIGIDO: Nome da função
-    final success = await appData.syncEnderecosFromCsv(); 
+    final success = await appData.syncEnderecosOnline(); 
     if (mounted) {
       if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Base de endereços carregada com sucesso!'), backgroundColor: Colors.green));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Base de endereços atualizada com sucesso!'), backgroundColor: Colors.green));
         _refreshList();
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Falha ao carregar o ficheiro CSV.'), backgroundColor: Colors.red));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Falha ao atualizar a base. Verifique a conexão e tente novamente.'), backgroundColor: Colors.red));
       }
     }
   }
@@ -76,7 +87,6 @@ class _TelaBaseEnderecosAlternativosState extends State<TelaBaseEnderecosAlterna
   Widget build(BuildContext context) {
     final appData = Provider.of<AppDataNotifier>(context);
     final auth = Provider.of<AuthNotifier>(context, listen: false);
-    // CORRIGIDO: Nome da variável
     final lastSync = appData.lastEnderecoSync; 
     
     return Scaffold(
@@ -107,11 +117,18 @@ class _TelaBaseEnderecosAlternativosState extends State<TelaBaseEnderecosAlterna
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(lastSync != null ? 'Última atualização: ${DateFormat('dd/MM/yy HH:mm').format(lastSync)}' : 'Nunca atualizado'),
+                    Flexible(
+                      child: Text(
+                        lastSync != null
+                            ? 'Última atualização: ${DateFormat('dd/MM/yy HH:mm').format(lastSync)}  |  Total: $_enderecoCount'
+                            : 'Nunca atualizado  |  Total: $_enderecoCount',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                     ElevatedButton.icon(
                       onPressed: appData.isSyncing ? null : _handleSync,
-                      icon: appData.isSyncing ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2,)) : const Icon(Icons.upload_file),
-                      label: Text(appData.isSyncing ? 'A Carregar...' : 'Carregar do CSV'),
+                      icon: appData.isSyncing ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2,)) : const Icon(Icons.sync),
+                      label: Text(appData.isSyncing ? appData.syncProgressMessage : 'Atualizar Base'),
                     )
                   ],
                 ),
@@ -145,3 +162,4 @@ class _TelaBaseEnderecosAlternativosState extends State<TelaBaseEnderecosAlterna
     );
   }
 }
+

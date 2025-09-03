@@ -15,28 +15,40 @@ class TelaBaseProdutos extends StatefulWidget {
 
 class _TelaBaseProdutosState extends State<TelaBaseProdutos> {
   late Future<List<Produto>> _produtosFuture;
+  int _produtoCount = 0;
 
   @override
   void initState() {
     super.initState();
     _refreshList();
+    _updateCount();
+  }
+  
+  void _updateCount() async {
+    final count = await widget.database.countProdutos();
+    if (mounted) {
+      setState(() {
+        _produtoCount = count;
+      });
+    }
   }
   
   void _refreshList() {
      setState(() {
       _produtosFuture = widget.database.getTodosProdutos();
+      _updateCount();
     });
   }
 
   void _handleSync() async {
     final appData = Provider.of<AppDataNotifier>(context, listen: false);
-    final success = await appData.syncProdutosFromCsv();
+    final success = await appData.syncProdutosOnline();
     if(mounted) {
       if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Base de produtos carregada com sucesso!'), backgroundColor: Colors.green));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Base de produtos atualizada com sucesso!'), backgroundColor: Colors.green));
         _refreshList();
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Falha ao carregar o ficheiro CSV.'), backgroundColor: Colors.red));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Falha ao atualizar a base. Verifique a conexão e tente novamente.'), backgroundColor: Colors.red));
       }
     }
   }
@@ -106,11 +118,18 @@ class _TelaBaseProdutosState extends State<TelaBaseProdutos> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(lastSync != null ? 'Última atualização: ${DateFormat('dd/MM/yy HH:mm').format(lastSync)}' : 'Nunca atualizado'),
+                    Flexible(
+                      child: Text(
+                        lastSync != null
+                            ? 'Última atualização: ${DateFormat('dd/MM/yy HH:mm').format(lastSync)}  |  Total: $_produtoCount'
+                            : 'Nunca atualizado  |  Total: $_produtoCount',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
                     ElevatedButton.icon(
                       onPressed: appData.isSyncing ? null : _handleSync,
-                      icon: appData.isSyncing ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2,)) : const Icon(Icons.upload_file),
-                      label: Text(appData.isSyncing ? 'A Carregar...' : 'Carregar do CSV'),
+                      icon: appData.isSyncing ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2,)) : const Icon(Icons.sync),
+                      label: Text(appData.isSyncing ? appData.syncProgressMessage : 'Atualizar Base'),
                     )
                   ],
                 ),
@@ -144,3 +163,4 @@ class _TelaBaseProdutosState extends State<TelaBaseProdutos> {
     );
   }
 }
+

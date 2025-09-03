@@ -22,8 +22,10 @@ dependencies:
   uuid: ^4.4.0
   intl: ^0.19.0
   csv: ^6.0.0
-  pdf: ^3.10.8 # Adicionado para gerar PDFs
-  printing: ^5.12.0 # Adicionado para a impressão
+  pdf: ^3.10.8
+  printing: ^5.12.0
+  fl_chart: ^0.68.0
+  package_info_plus: ^8.0.0
 
 dev_dependencies:
   flutter_test:
@@ -35,5 +37,5 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/images/ # Garante que todas as imagens são incluídas
-    - assets/csv/ # Garante que os CSVs são incluídos
+    - assets/images/
+
