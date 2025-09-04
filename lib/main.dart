@@ -5,7 +5,7 @@ import 'database.dart';
 import 'providers/theme_notifier.dart';
 import 'providers/app_data_notifier.dart';
 import 'providers/auth_notifier.dart';
-import 'providers/pedido_provider.dart'; // Importado
+import 'providers/pedido_provider.dart';
 import 'screens/login/tela_login.dart';
 import 'screens/home/main_layout.dart';
 import 'screens/pedido/tela_de_pedido.dart';
@@ -31,7 +31,7 @@ void main() {
         ChangeNotifierProvider(create: (_) => ThemeNotifier()),
         ChangeNotifierProvider(create: (_) => AppDataNotifier(database)),
         ChangeNotifierProvider(create: (_) => AuthNotifier()),
-        ChangeNotifierProvider(create: (_) => PedidoProvider()), // Adicionado
+        ChangeNotifierProvider(create: (_) => PedidoProvider(database)), // CORREÇÃO AQUI
       ],
       child: MyApp(database: database),
     ),
@@ -44,29 +44,22 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Define um TextTheme base com tamanhos maiores
-    const TextTheme baseTextTheme = TextTheme(
-      displayLarge: TextStyle(fontSize: 102.0),
-      displayMedium: TextStyle(fontSize: 64.0),
-      displaySmall: TextStyle(fontSize: 51.0),
-      headlineMedium: TextStyle(fontSize: 36.0),
-      headlineSmall: TextStyle(fontSize: 25.0),
-      titleLarge: TextStyle(fontSize: 21.0),
-      titleMedium: TextStyle(fontSize: 17.0),
-      titleSmall: TextStyle(fontSize: 15.0),
-      bodyLarge: TextStyle(fontSize: 17.0),
-      bodyMedium: TextStyle(fontSize: 15.0),
-      labelLarge: TextStyle(fontSize: 15.0),
-    );
-
     return Consumer<ThemeNotifier>(
       builder: (context, themeNotifier, child) {
+        final baseTheme = ThemeData.dark();
+        final textTheme = GoogleFonts.leagueSpartanTextTheme(baseTheme.textTheme);
+
         return MaterialApp(
-          title: 'Order to Smile',
+          title: 'Conecta Vendas',
           debugShowCheckedModeBanner: false,
-          theme: ThemeData.dark().copyWith(
-            // Aplica a fonte do Google ao TextTheme base com tamanhos maiores
-            textTheme: GoogleFonts.leagueSpartanTextTheme(baseTextTheme),
+          theme: baseTheme.copyWith(
+            textTheme: textTheme.copyWith(
+              bodyLarge: textTheme.bodyLarge?.copyWith(fontSize: 16),
+              bodyMedium: textTheme.bodyMedium?.copyWith(fontSize: 14),
+              titleMedium: textTheme.titleMedium?.copyWith(fontSize: 18),
+              titleLarge: textTheme.titleLarge?.copyWith(fontSize: 22),
+              headlineSmall: textTheme.headlineSmall?.copyWith(fontSize: 24),
+            ),
             colorScheme: ColorScheme.fromSeed(
               seedColor: themeNotifier.currentTheme.primaryColor,
               brightness: Brightness.dark,
@@ -75,7 +68,7 @@ class MyApp extends StatelessWidget {
           home: TelaLogin(database: database),
           routes: {
             '/home':(context) => MainLayout(database: database),
-            '/pedido': (context) => const TelaDePedido(),
+            '/pedido': (context) => TelaDePedido(database: database),
             '/pre_cadastro_cliente': (context) => TelaPreCadastroCliente(database: database),
             '/visualizacoes': (context) => TelaVisualizacoes(database: database),
             '/ajuda': (context) => const TelaAjuda(),

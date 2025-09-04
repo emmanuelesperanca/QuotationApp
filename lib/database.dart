@@ -1,22 +1,12 @@
-import 'package:drift/drift.dart';
-import 'package:flutter/foundation.dart'; 
 import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'package:intl/intl.dart';
-
+import 'package:drift/drift.dart';
+import 'package:flutter/foundation.dart';
+import 'models/promocao.dart';
 
 // Importa o conector de forma condicional.
 import 'connection/native.dart' if (dart.library.html) 'connection/web.dart';
 
 part 'database.g.dart';
-
-// Classe de apoio para os rankings do dashboard
-class RankingItem {
-  final String nome;
-  final int contagem;
-  RankingItem({required this.nome, required this.contagem});
-}
-
 
 // --- DEFINIÇÃO DAS TABELAS ---
 @DataClassName('Cliente')
@@ -71,12 +61,18 @@ class PedidosPendentes extends Table {
 @DataClassName('PedidoEnviado')
 class PedidosEnviados extends Table {
   IntColumn get id => integer().autoIncrement()();
-  TextColumn get appPedidoId => text().nullable()(); 
+  TextColumn get appPedidoId => text().nullable()();
   TextColumn get pedidoJson => text()();
   DateTimeColumn get dataEnvio => dateTime()();
   TextColumn get numeroPedidoSap => text().nullable()();
   TextColumn get status => text().nullable()();
   TextColumn get obsCentral => text().nullable()();
+}
+
+class RankingItem {
+  final String nome;
+  final int contagem;
+  RankingItem({required this.nome, required this.contagem});
 }
 
 
@@ -124,23 +120,29 @@ class AppDatabase extends _$AppDatabase {
         .get();
   }
   Future<void> apagarTodosClientes() => delete(clientes).go();
-  Future<void> inserirClientesEmMassa(List<ClientesCompanion> novosClientes) async {
-    await batch((batch) {
-      batch.insertAll(clientes, novosClientes, mode: InsertMode.insertOrReplace);
-    });
-  }
   Future<int> countClientes() async {
-    final count = clientes.id.count();
-    final query = selectOnly(clientes)..addColumns([count]);
-    return await query.map((row) => row.read(count) ?? 0).getSingle();
+    final countExp = clientes.id.count();
+    final query = selectOnly(clientes)..addColumns([countExp]);
+    return (await query.map((row) => row.read(countExp)).getSingle()) ?? 0;
   }
-  // Adicionado: Método para verificar se um cliente existe pelo CPF/CNPJ
-  Future<bool> clienteExistsByCpfCnpj(String cpfCnpj) async {
-    final query = select(clientes)..where((c) => c.cpfCnpj.equals(cpfCnpj));
-    final result = await query.get();
+   Future<bool> clienteExistsByCpfCnpj(String cpfCnpj) async {
+    final result = await (select(clientes)..where((tbl) => tbl.cpfCnpj.equals(cpfCnpj))).get();
     return result.isNotEmpty;
   }
-
+  Future<void> populateClientesFromAPI(List<dynamic> data) async {
+    await batch((batch) {
+      final companions = data.map((row) => ClientesCompanion.insert(
+        numeroCliente: row['NumeroCliente']?.toString() ?? '',
+        cpfCnpj: Value(row['CPF']?.toString() ?? row['CNPJ']?.toString()),
+        nome: row['Nome1']?.toString() ?? 'N/A',
+        enderecoCompleto: Value('${row['Rua']} ${row['NumeroEndereco']}, ${row['Bairro']} - ${row['Cidade']}'),
+        telefone1: Value(row['Telefone1']?.toString()),
+        telefone2: Value(row['Telefone2']?.toString()),
+        email: Value(row['Email']?.toString()),
+      )).toList();
+      batch.insertAll(clientes, companions, mode: InsertMode.insertOrReplace);
+    });
+  }
 
   // --- MÉTODOS DE PRÉ-CADASTRO ---
   Future<void> inserePreCadastro(PreCadastrosCompanion preCadastro) => into(preCadastros).insert(preCadastro);
@@ -163,15 +165,20 @@ class AppDatabase extends _$AppDatabase {
     return (select(enderecosAlternativos)..where((e) => e.cpfCnpj.equals(cpfCnpj))).get();
   }
   Future<void> apagarTodosEnderecos() => delete(enderecosAlternativos).go();
-  Future<void> inserirEnderecosEmMassa(List<EnderecosAlternativosCompanion> novosEnderecos) async {
-    await batch((batch) {
-      batch.insertAll(enderecosAlternativos, novosEnderecos, mode: InsertMode.insertOrReplace);
-    });
-  }
    Future<int> countEnderecos() async {
-    final count = enderecosAlternativos.id.count();
-    final query = selectOnly(enderecosAlternativos)..addColumns([count]);
-    return await query.map((row) => row.read(count) ?? 0).getSingle();
+    final countExp = enderecosAlternativos.id.count();
+    final query = selectOnly(enderecosAlternativos)..addColumns([countExp]);
+    return (await query.map((row) => row.read(countExp)).getSingle()) ?? 0;
+  }
+  Future<void> populateEnderecosFromAPI(List<dynamic> data) async {
+    await batch((batch) {
+      final companions = data.map((row) => EnderecosAlternativosCompanion.insert(
+        cpfCnpj: row['CPF']?.toString() ?? row['CNPJ']?.toString() ?? '',
+        numeroCliente: row['NumeroCliente']?.toString() ?? '',
+        enderecoFormatado: '${row['Rua']} ${row['NumeroEndereco']}, ${row['Bairro']} - ${row['Cidade']}',
+      )).toList();
+      batch.insertAll(enderecosAlternativos, companions, mode: InsertMode.insertOrReplace);
+    });
   }
 
 
@@ -186,17 +193,26 @@ class AppDatabase extends _$AppDatabase {
           ..where((p) => p.descricao.like('%$query%') | p.referencia.like('%$query%')))
         .get();
   }
+  Future<List<Produto>> searchProdutosPorFamilia(String familia) {
+    return (select(produtos)..where((p) => p.descricao.like('$familia%'))).get();
+  }
   Future<void> apagarTodosProdutos() => delete(produtos).go();
-  Future<void> inserirProdutosEmMassa(List<ProdutosCompanion> novosProdutos) async {
+   Future<int> countProdutos() async {
+    final countExp = produtos.id.count();
+    final query = selectOnly(produtos)..addColumns([countExp]);
+    return (await query.map((row) => row.read(countExp)).getSingle()) ?? 0;
+  }
+  Future<void> populateProdutosFromAPI(List<dynamic> data) async {
     await batch((batch) {
-      batch.insertAll(produtos, novosProdutos, mode: InsertMode.insertOrReplace);
+      final companions = data.map((row) => ProdutosCompanion.insert(
+        referencia: row['Referencia']?.toString() ?? '',
+        descricao: row['Descricao']?.toString() ?? 'N/A',
+        valor: (row['Valor'] as num?)?.toDouble() ?? 0.0,
+      )).toList();
+      batch.insertAll(produtos, companions, mode: InsertMode.insertOrReplace);
     });
   }
-  Future<int> countProdutos() async {
-    final count = produtos.id.count();
-    final query = selectOnly(produtos)..addColumns([count]);
-    return await query.map((row) => row.read(count) ?? 0).getSingle();
-  }
+
 
   // --- MÉTODOS DE PEDIDOS ---
   Future<List<PedidoPendente>> getTodosPedidosPendentes() => (select(pedidosPendentes)..orderBy([(t) => OrderingTerm.desc(t.id)])).get();
@@ -242,57 +258,19 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> apagarTodosPedidosEnviados() => delete(pedidosEnviados).go();
   Future<void> apagarTodosPedidosPendentes() => delete(pedidosPendentes).go();
- 
-  Future<void> populateClientesFromAPI(List<dynamic> data) async {
-    await apagarTodosClientes();
-    final companions = data.map((clienteData) {
-      return ClientesCompanion.insert(
-        numeroCliente: clienteData['NumeroCliente']?.toString() ?? '',
-        cpfCnpj: Value(clienteData['CPF']?.toString() ?? ''),
-        nome: clienteData['Nome1']?.toString() ?? '',
-        enderecoCompleto: Value('${clienteData['Rua'] ?? ''} ${clienteData['NumeroEndereco'] ?? ''}, ${clienteData['Bairro'] ?? ''} - ${clienteData['Cidade'] ?? ''}'),
-        telefone1: Value(clienteData['Telefone1']?.toString()),
-        telefone2: Value(clienteData['Telefone2']?.toString()),
-        email: Value(clienteData['Email']?.toString()),
-      );
-    }).toList();
-    await inserirClientesEmMassa(companions);
-  }
 
-  Future<void> populateProdutosFromAPI(List<dynamic> data) async {
-    await apagarTodosProdutos();
-    final companions = data.map((produtoData) {
-      return ProdutosCompanion.insert(
-        referencia: produtoData['Referencia']?.toString() ?? '',
-        descricao: produtoData['Descricao']?.toString() ?? '',
-        valor: (produtoData['Valor'] as num?)?.toDouble() ?? 0.0,
-      );
-    }).toList();
-    await inserirProdutosEmMassa(companions);
-  }
 
-  Future<void> populateEnderecosFromAPI(List<dynamic> data) async {
-    await apagarTodosEnderecos();
-    final companions = data.map((enderecoData) {
-      return EnderecosAlternativosCompanion.insert(
-        cpfCnpj: enderecoData['CPF']?.toString() ?? '',
-        numeroCliente: enderecoData['NumeroCliente']?.toString() ?? '',
-        enderecoFormatado: '${enderecoData['Rua'] ?? ''} ${enderecoData['NumeroEndereco'] ?? ''}, ${enderecoData['Bairro'] ?? ''} - ${enderecoData['Cidade'] ?? ''}',
-      );
-    }).toList();
-    await inserirEnderecosEmMassa(companions);
-  }
-
-  // --- MÉTODOS PARA O DASHBOARD ---
+  // --- MÉTODOS DO DASHBOARD ---
   Future<int> countPedidosEnviados() async {
-    final count = pedidosEnviados.id.count();
-    final query = selectOnly(pedidosEnviados)..addColumns([count]);
-    return await query.map((row) => row.read(count) ?? 0).getSingle();
+    final countExp = pedidosEnviados.id.count();
+    final query = selectOnly(pedidosEnviados)..addColumns([countExp]);
+    final result = await query.map((row) => row.read(countExp)).getSingle();
+    return result ?? 0;
   }
 
   Future<double> sumTotalPedidosEnviados() async {
-    double total = 0;
-    final pedidos = await select(pedidosEnviados).get();
+    final pedidos = await getTodosPedidosEnviados();
+    double total = 0.0;
     for (var pedido in pedidos) {
       final data = jsonDecode(pedido.pedidoJson);
       total += (data['total'] as num?)?.toDouble() ?? 0.0;
@@ -300,63 +278,68 @@ class AppDatabase extends _$AppDatabase {
     return total;
   }
 
-  Future<List<RankingItem>> getTopProdutosVendidos({int limit = 5}) async {
+  Future<List<RankingItem>> getTopProdutosVendidos(int limit) async {
     final pedidos = await getTodosPedidosEnviados();
-    final Map<String, int> contagemProdutos = {};
+    final Map<String, int> contagem = {};
 
     for (var pedido in pedidos) {
-      final pedidoData = jsonDecode(pedido.pedidoJson);
-      final List<dynamic> itensJson = (pedidoData['itens'] is String)
-        ? jsonDecode(pedidoData['itens'])
-        : pedidoData['itens'];
-
-      for (var itemMap in itensJson) {
-        final descricao = itemMap['descricao'] as String? ?? 'N/A';
-        contagemProdutos.update(descricao, (value) => value + 1, ifAbsent: () => 1);
+      final data = jsonDecode(pedido.pedidoJson);
+      if (data['itens'] is String) {
+        final List<dynamic> itens = jsonDecode(data['itens']);
+        for (var item in itens) {
+          final descricao = item['descricao'] as String? ?? 'N/A';
+          contagem[descricao] = (contagem[descricao] ?? 0) + (item['qtd'] as int? ?? 0);
+        }
       }
     }
-    final sortedProdutos = contagemProdutos.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
     
-    return sortedProdutos.take(limit).map((e) => RankingItem(nome: e.key, contagem: e.value)).toList();
-  }
- 
-  Future<List<RankingItem>> getTopClientes({int limit = 5}) async {
-    final pedidos = await getTodosPedidosEnviados();
-    final Map<String, int> contagemClientes = {};
-    for (var pedido in pedidos) {
-      final pedidoData = jsonDecode(pedido.pedidoJson);
-      final nomeCliente = pedidoData['cliente'] as String? ?? 'N/A';
-      contagemClientes.update(nomeCliente, (value) => value + 1, ifAbsent: () => 1);
-    }
-    
-    final sortedClientes = contagemClientes.entries.toList()
+    final sortedItems = contagem.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
       
-    return sortedClientes.take(limit).map((e) => RankingItem(nome: e.key, contagem: e.value)).toList();
+    return sortedItems
+        .take(limit)
+        .map((e) => RankingItem(nome: e.key, contagem: e.value))
+        .toList();
+  }
+  
+  Future<List<RankingItem>> getTopClientes(int limit) async {
+    final pedidos = await getTodosPedidosEnviados();
+    final Map<String, int> contagem = {};
+
+    for (var pedido in pedidos) {
+        final data = jsonDecode(pedido.pedidoJson);
+        final cliente = data['cliente'] as String? ?? 'N/A';
+        contagem[cliente] = (contagem[cliente] ?? 0) + 1;
+    }
+
+    final sortedItems = contagem.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+      
+    return sortedItems
+        .take(limit)
+        .map((e) => RankingItem(nome: e.key, contagem: e.value))
+        .toList();
   }
 
-  Future<Map<DateTime, int>> getPedidosNosUltimosDias({int dias = 7}) async {
+  Future<Map<String, int>> getPedidosNosUltimosDias(int days) async {
     final hoje = DateTime.now();
-    final dataLimite = hoje.subtract(Duration(days: dias - 1));
-    final query = select(pedidosEnviados)
-      ..where((p) => p.dataEnvio.isBiggerOrEqualValue(DateTime(dataLimite.year, dataLimite.month, dataLimite.day)));
-      
-    final pedidos = await query.get();
-    final Map<DateTime, int> contagemPorDia = {};
+    final Map<String, int> contagemDias = {};
 
-    for (int i = 0; i < dias; i++) {
-      final dia = DateTime(hoje.year, hoje.month, hoje.day).subtract(Duration(days: i));
-      contagemPorDia[dia] = 0;
+    for (int i = days - 1; i >= 0; i--) {
+      final dia = hoje.subtract(Duration(days: i));
+      final diaFormatado = '${dia.day}/${dia.month}';
+      contagemDias[diaFormatado] = 0;
     }
-    
+
+    final query = select(pedidosEnviados)..where((tbl) => tbl.dataEnvio.isBetweenValues(hoje.subtract(Duration(days: days)), hoje));
+    final pedidos = await query.get();
+
     for (var pedido in pedidos) {
-      final diaPedido = DateTime(pedido.dataEnvio.year, pedido.dataEnvio.month, pedido.dataEnvio.day);
-      if (contagemPorDia.containsKey(diaPedido)) {
-        contagemPorDia.update(diaPedido, (value) => value + 1);
-      }
+        final dia = pedido.dataEnvio;
+        final diaFormatado = '${dia.day}/${dia.month}';
+        contagemDias[diaFormatado] = (contagemDias[diaFormatado] ?? 0) + 1;
     }
-    return contagemPorDia;
+    return contagemDias;
   }
 }
 

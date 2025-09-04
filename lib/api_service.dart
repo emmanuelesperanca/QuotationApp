@@ -1,6 +1,9 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 
 class ApiService {
   // URLs
@@ -9,6 +12,21 @@ class ApiService {
   static const String _getBaseDataUrl = 'https://default1900aa23cb5a4a458ad0968d229e95.5f.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/0350ab1197f944228fbd1f92bc14fb37/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=GWf97mW7xduKqEC4owLSI93T48B8ye6K-YO34sS66R0';
   static const String _analyticsUrl = 'https://default1900aa23cb5a4a458ad0968d229e95.5f.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/3ebbaa398f4c41288bfa2918425e4fa9/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=WzfQSg_I566NsagX8hgM7VdfFFUs4zPmpGJhMnjaZJM';
   
+  static Future<String> getAppVersion() async {
+    PackageInfo packageInfo = await PackageInfo.fromPlatform();
+    return packageInfo.version;
+  }
+
+  static Future<String?> getDeviceUUID() async {
+    final prefs = await SharedPreferences.getInstance();
+    String? uuid = prefs.getString('deviceUUID');
+    if (uuid == null) {
+      uuid = const Uuid().v4();
+      await prefs.setString('deviceUUID', uuid);
+    }
+    return uuid;
+  }
+
   // Envia um pedido para a API principal
   static Future<bool> enviarPedido(Map<String, dynamic> pedidoData) async {
     try {
@@ -47,7 +65,7 @@ class ApiService {
     return null;
   }
 
-  // Obtém dados da base (clientes, produtos, etc.)
+  // Obtém dados da base (clientes, produtos, etc.) com paginação
   static Future<List<dynamic>?> getBaseData(String dataType, int skip) async {
     try {
       final response = await http.post(
@@ -57,7 +75,6 @@ class ApiService {
       ).timeout(const Duration(seconds: 90));
 
       if (response.statusCode == 200) {
-        // A API parece devolver o JSON dentro de uma chave 'body'
         final responseBody = jsonDecode(response.body);
         return responseBody is List ? responseBody : null;
       } else {

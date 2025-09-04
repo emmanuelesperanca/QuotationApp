@@ -5,6 +5,7 @@ class ItemPedido {
   int qtd;
   double desconto;
   bool isSelected;
+  final bool isPromocional; // NOVO: Identifica se o item veio de uma promoção
 
   ItemPedido({
     required this.cod,
@@ -13,6 +14,7 @@ class ItemPedido {
     this.qtd = 1,
     this.desconto = 0.0,
     this.isSelected = false,
+    this.isPromocional = false, // NOVO: Valor padrão é falso
   });
 
   // Converte o objeto para um mapa JSON

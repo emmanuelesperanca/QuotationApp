@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'package:fl_chart/fl_chart.dart';
 import 'package:provider/provider.dart';
+import 'package:fl_chart/fl_chart.dart';
+import 'package:intl/intl.dart';
 import '../../database.dart';
-import '../../models/app_theme.dart';
+import '../../providers/app_data_notifier.dart';
 import '../../providers/theme_notifier.dart';
 
 class TelaDashboard extends StatefulWidget {
@@ -15,33 +15,35 @@ class TelaDashboard extends StatefulWidget {
 }
 
 class _TelaDashboardState extends State<TelaDashboard> {
-  late Future<int> _totalPedidosFuture;
-  late Future<double> _valorTotalFuture;
-  late Future<int> _pedidosPendentesFuture;
-  late Future<List<RankingItem>> _topProdutosFuture;
-  late Future<List<RankingItem>> _topClientesFuture;
-  late Future<Map<DateTime, int>> _pedidosSemanaFuture;
+  Future<int>? _totalPedidosFuture;
+  Future<double>? _valorTotalFuture;
+  Future<int>? _pedidosPendentesFuture;
+  Future<List<RankingItem>>? _topProdutosFuture;
+  Future<List<RankingItem>>? _topClientesFuture;
+  Future<Map<String, int>>? _pedidosSemanaFuture;
 
   @override
   void initState() {
     super.initState();
-    _loadDashboardData();
+    _loadData();
   }
 
-  void _loadDashboardData() {
+  void _loadData() {
     setState(() {
       _totalPedidosFuture = widget.database.countPedidosEnviados();
       _valorTotalFuture = widget.database.sumTotalPedidosEnviados();
       _pedidosPendentesFuture = widget.database.countPedidosPendentes();
-      _topProdutosFuture = widget.database.getTopProdutosVendidos();
-      _topClientesFuture = widget.database.getTopClientes();
-      _pedidosSemanaFuture = widget.database.getPedidosNosUltimosDias();
+      _topProdutosFuture = widget.database.getTopProdutosVendidos(5);
+      _topClientesFuture = widget.database.getTopClientes(5);
+      _pedidosSemanaFuture = widget.database.getPedidosNosUltimosDias(7);
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Provider.of<ThemeNotifier>(context).currentTheme;
+    final themeNotifier = Provider.of<ThemeNotifier>(context);
+    final appData = Provider.of<AppDataNotifier>(context, listen: false);
+    final currencyFormat = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -51,7 +53,7 @@ class _TelaDashboardState extends State<TelaDashboard> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _loadDashboardData,
+            onPressed: _loadData,
             tooltip: 'Atualizar Dados',
           ),
         ],
@@ -60,76 +62,137 @@ class _TelaDashboardState extends State<TelaDashboard> {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            _buildKpiRow(theme),
+            // --- KPIs ---
+            Row(
+              children: [
+                Expanded(
+                  child: FutureBuilder<double>(
+                    future: _valorTotalFuture,
+                    builder: (context, snapshot) => _buildKpiCard(
+                      title: 'Valor Total Faturado',
+                      value: snapshot.hasData ? currencyFormat.format(snapshot.data) : '...',
+                      icon: Icons.monetization_on,
+                      color: Colors.green.shade800,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: FutureBuilder<int>(
+                    future: _totalPedidosFuture,
+                    builder: (context, snapshot) => _buildKpiCard(
+                      title: 'Total de Pedidos Enviados',
+                      value: snapshot.hasData ? snapshot.data.toString() : '...',
+                      icon: Icons.check_circle,
+                      color: themeNotifier.currentTheme.primaryColor,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _buildKpiCard(
+                    title: 'Pedidos Pendentes',
+                    value: appData.pendingOrderCount.toString(),
+                    icon: Icons.warning,
+                    color: Colors.orange.shade800,
+                  ),
+                ),
+              ],
+            ),
             const SizedBox(height: 24),
+
+            // --- RANKINGS ---
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(child: _buildRankingCard('Top 5 Produtos Mais Vendidos', Icons.star, _topProdutosFuture)),
+                Expanded(
+                  child: _buildRankingCard<RankingItem>(
+                    title: 'Top 5 Produtos Mais Vendidos',
+                    future: _topProdutosFuture,
+                    itemBuilder: (item) => ListTile(
+                      leading: const Icon(Icons.inventory_2),
+                      title: Text(item.nome),
+                      trailing: Text(item.contagem.toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ),
                 const SizedBox(width: 16),
-                Expanded(child: _buildRankingCard('Top 5 Clientes', Icons.person, _topClientesFuture)),
+                Expanded(
+                  child: _buildRankingCard<RankingItem>(
+                    title: 'Top 5 Clientes',
+                    future: _topClientesFuture,
+                    itemBuilder: (item) => ListTile(
+                      leading: const Icon(Icons.person),
+                      title: Text(item.nome),
+                      trailing: Text('${item.contagem} pedidos', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 24),
-            _buildChartCard(theme),
+
+            // --- GRÁFICO DE ATIVIDADE SEMANAL ---
+            _buildChartCard(),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  // --- WIDGETS AUXILIARES ---
+  Widget _buildKpiCard({required String title, required String value, required IconData icon, required Color color}) {
+    return Card(
+      elevation: 4,
+      color: color.withOpacity(0.8),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: 32, color: Colors.white),
+            const SizedBox(height: 12),
+            Text(value, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white)),
+            Text(title, style: const TextStyle(fontSize: 14, color: Colors.white70)),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildKpiRow(AppTheme theme) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceAround,
-      children: [
-        Expanded(child: _buildKpiCard('Total de Pedidos Enviados', _totalPedidosFuture, Icons.shopping_cart, theme.primaryColor, isCurrency: false)),
-        const SizedBox(width: 16),
-        Expanded(child: _buildKpiCard('Valor Total Faturado', _valorTotalFuture, Icons.attach_money, Colors.green.shade800, isCurrency: true)),
-        const SizedBox(width: 16),
-        Expanded(child: _buildKpiCard('Pedidos Pendentes', _pedidosPendentesFuture, Icons.pending_actions, Colors.orange.shade800, isCurrency: false)),
-      ],
-    );
-  }
-
-  Widget _buildKpiCard(String title, Future<num>? future, IconData icon, Color cardColor, {bool isCurrency = false}) {
+  Widget _buildRankingCard<T>({required String title, required Future<List<T>?>? future, required Widget Function(T) itemBuilder}) {
     return Card(
       elevation: 4,
-      color: cardColor.withOpacity(0.8),
+      color: Colors.black.withOpacity(0.4),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, size: 32, color: Colors.white70),
+            Text(title, style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
-            Text(title, textAlign: TextAlign.center, style: TextStyle(color: Colors.white.withOpacity(0.8))),
-            const SizedBox(height: 8),
-            FutureBuilder<num>(
+            FutureBuilder<List<T>?>(
               future: future,
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white,));
-                }
-                if (snapshot.hasError) {
-                  return const Text('Erro', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold));
-                }
-                final value = snapshot.data ?? 0;
-                final formattedValue = isCurrency 
-                  ? NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$').format(value)
-                  : value.toStringAsFixed(0);
-
-                return Text(
-                  formattedValue,
-                  style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white),
+                if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+                if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text('Nenhum dado disponível.'));
+                return ListView.separated(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: snapshot.data!.length,
+                  itemBuilder: (context, index) => itemBuilder(snapshot.data![index]),
+                  separatorBuilder: (context, index) => const Divider(),
                 );
               },
-            ),
+            )
           ],
         ),
       ),
     );
   }
 
-  Widget _buildRankingCard(String title, IconData icon, Future<List<RankingItem>>? future) {
+  Widget _buildChartCard() {
+    final themeNotifier = Provider.of<ThemeNotifier>(context);
     return Card(
       elevation: 4,
       color: Colors.black.withOpacity(0.4),
@@ -138,130 +201,58 @@ class _TelaDashboardState extends State<TelaDashboard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Icon(icon, color: Colors.amber),
-                const SizedBox(width: 8),
-                Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              ],
-            ),
-            const Divider(height: 20),
-            FutureBuilder<List<RankingItem>>(
-              future: future,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
-                  return const Text('Nenhum dado disponível.');
-                }
-                return _buildRankingList(snapshot.data!);
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRankingList(List<RankingItem> items) {
-    return Column(
-      children: items.asMap().entries.map((entry) {
-        int idx = entry.key;
-        RankingItem item = entry.value;
-        return ListTile(
-          dense: true,
-          contentPadding: EdgeInsets.zero,
-          leading: CircleAvatar(
-            backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.8 - (idx * 0.15)),
-            child: Text('${idx + 1}', style: const TextStyle(fontWeight: FontWeight.bold)),
-          ),
-          title: Text(item.nome, overflow: TextOverflow.ellipsis),
-          trailing: Text(item.contagem.toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildChartCard(AppTheme theme) {
-    return Card(
-       elevation: 4,
-      color: Colors.black.withOpacity(0.4),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Pedidos nos Últimos 7 Dias', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 20),
+            Text('Atividade nos Últimos 7 Dias', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 24),
             SizedBox(
               height: 250,
-              child: FutureBuilder<Map<DateTime, int>>(
+              child: FutureBuilder<Map<String, int>>(
                 future: _pedidosSemanaFuture,
                 builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  if (snapshot.hasError || !snapshot.hasData) {
-                    return const Center(child: Text('Erro ao carregar dados do gráfico.'));
-                  }
-
-                  final data = snapshot.data!;
-                  final sortedKeys = data.keys.toList()..sort();
+                  if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+                  if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text('Nenhum dado.'));
                   
+                  final data = snapshot.data!;
+                  final maxValue = data.values.fold(0, (max, v) => v > max ? v : max).toDouble();
+
                   return BarChart(
                     BarChartData(
-                      alignment: BarChartAlignment.spaceAround,
-                      maxY: (data.values.isNotEmpty ? data.values.reduce((a, b) => a > b ? a : b) : 0) * 1.2,
+                      maxY: maxValue * 1.2, // Um pouco de espaço no topo
                       barTouchData: BarTouchData(
                         touchTooltipData: BarTouchTooltipData(
-                          getTooltipColor: (group) => Colors.blueGrey,
-                          getTooltipItem: (group, groupIndex, rod, rodIndex) {
-                            return BarTooltipItem(
-                              '${rod.toY.round()}',
-                              const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                            );
-                          },
+                          getTooltipItem: (group, groupIndex, rod, rodIndex) => BarTooltipItem(
+                            '${rod.toY.round()} pedidos',
+                            const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                          ),
                         ),
                       ),
                       titlesData: FlTitlesData(
                         show: true,
-                        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                         rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                         bottomTitles: AxisTitles(
                           sideTitles: SideTitles(
                             showTitles: true,
-                            getTitlesWidget: (value, meta) {
-                              final day = sortedKeys[value.toInt()];
-                              return SideTitleWidget(
-                                axisSide: meta.axisSide,
-                                child: Text(DateFormat('dd/MM').format(day), style: const TextStyle(fontSize: 12)),
-                              );
-                            },
-                            reservedSize: 30,
+                            getTitlesWidget: (value, meta) => SideTitleWidget(axisSide: meta.axisSide, child: Text(data.keys.elementAt(value.toInt()), style: const TextStyle(fontSize: 10))),
+                            reservedSize: 38,
                           ),
+                        ),
+                        leftTitles: AxisTitles(
+                          sideTitles: SideTitles(showTitles: true, reservedSize: 28),
                         ),
                       ),
                       borderData: FlBorderData(show: false),
-                      gridData: FlGridData(
-                        show: true,
-                        getDrawingHorizontalLine: (value) => const FlLine(color: Colors.white12, strokeWidth: 1),
-                        drawVerticalLine: false
-                      ),
-                      barGroups: sortedKeys.asMap().entries.map((entry) {
+                      barGroups: data.entries.map((e) {
+                        final index = data.keys.toList().indexOf(e.key);
                         return BarChartGroupData(
-                          x: entry.key,
+                          x: index,
                           barRods: [
                             BarChartRodData(
-                              toY: data[entry.value]?.toDouble() ?? 0,
-                              color: theme.primaryColor,
-                              width: 20,
-                              borderRadius: const BorderRadius.only(
-                                topLeft: Radius.circular(6),
-                                topRight: Radius.circular(6),
-                              )
+                              toY: e.value.toDouble(),
+                              color: themeNotifier.currentTheme.secondaryColor,
+                              width: 22,
+                              borderRadius: BorderRadius.circular(4),
                             )
-                          ]
+                          ],
                         );
                       }).toList(),
                     ),

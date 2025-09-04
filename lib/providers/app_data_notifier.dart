@@ -11,16 +11,25 @@ class AppDataNotifier with ChangeNotifier {
   DateTime? _lastProductSync;
   DateTime? _lastEnderecoSync;
   bool _isSyncing = false;
-  bool _isSyncCancelled = false;
-  double _syncProgress = 0.0;
+  bool _cancelSync = false;
   String _syncMessage = '';
+  double _syncProgress = 0.0;
 
-  Timer? _syncTimer;
+  // Valores totais aproximados para a barra de progresso
+  final int _totalClientesAprox = 160000;
+  final int _totalProdutosAprox = 20000;
+  final int _totalEnderecosAprox = 100000;
+
 
   AppDataNotifier(this.database) {
     updatePendingOrderCount();
     _loadSyncDates();
-    _startAutoSyncTimer();
+    // Inicia a sincronização automática em segundo plano
+    Timer.periodic(const Duration(hours: 1), (timer) {
+      if (!_isSyncing) {
+        syncAllBasesSilently();
+      }
+    });
   }
 
   // Getters
@@ -29,23 +38,8 @@ class AppDataNotifier with ChangeNotifier {
   DateTime? get lastProductSync => _lastProductSync;
   DateTime? get lastEnderecoSync => _lastEnderecoSync;
   bool get isSyncing => _isSyncing;
-  double get syncProgress => _syncProgress;
   String get syncMessage => _syncMessage;
-
-  @override
-  void dispose() {
-    _syncTimer?.cancel();
-    super.dispose();
-  }
-
-  void _startAutoSyncTimer() {
-    _syncTimer = Timer.periodic(const Duration(hours: 1), (timer) {
-      debugPrint("--- Disparando sincronização automática horária ---");
-      syncClientesFromAPI();
-      syncProdutosFromAPI();
-      syncEnderecosFromAPI();
-    });
-  }
+  double get syncProgress => _syncProgress;
 
   Future<void> _loadSyncDates() async {
     final prefs = await SharedPreferences.getInstance();
@@ -65,173 +59,186 @@ class AppDataNotifier with ChangeNotifier {
   }
   
   void cancelSync() {
-    if (_isSyncing) {
-      _isSyncCancelled = true;
-      debugPrint("--- Solicitação de cancelamento de sincronização recebida ---");
-    }
+    _cancelSync = true;
+    _syncMessage = 'Sincronização cancelada...';
+    notifyListeners();
   }
 
+  // --- LÓGICA DE SINCRONIZAÇÃO DE CLIENTES ---
   Future<bool> syncClientesFromAPI() async {
-    if (_isSyncing) return false;
-    
     _isSyncing = true;
-    _isSyncCancelled = false;
+    _cancelSync = false;
     _syncProgress = 0.0;
-    _syncMessage = "A iniciar sincronização de clientes...";
+    _syncMessage = 'A iniciar sincronização de clientes...';
     notifyListeners();
 
-    try {
-      final List<Map<String, dynamic>> allData = [];
-      int skip = 0;
-      const int batchSize = 2048;
-      const int totalApprox = 160000;
-
-      while (true) {
-        if (_isSyncCancelled) throw Exception("Sincronização cancelada pelo utilizador.");
-
-        _syncMessage = "A buscar clientes... (${allData.length}/~$totalApprox)";
-        _syncProgress = allData.length / totalApprox;
-        notifyListeners();
-
-        final List<dynamic>? batch = await ApiService.getBaseData('clientes', skip);
-
-        if (batch == null) throw Exception("Falha ao buscar dados da API.");
-        
-        allData.addAll(batch.cast<Map<String, dynamic>>());
-
-        if (batch.length < batchSize) break;
-        skip += batchSize;
+    await database.apagarTodosClientes();
+    
+    int totalRecebido = 0;
+    bool sucesso = true;
+    
+    while (true) {
+      if (_cancelSync) {
+        sucesso = false;
+        break;
       }
       
-      _syncMessage = "A processar e guardar ${allData.length} clientes na base de dados...";
+      _syncMessage = 'A buscar clientes... ($totalRecebido / ~$_totalClientesAprox)';
       notifyListeners();
 
-      if (!_isSyncCancelled) {
-        await database.populateClientesFromAPI(allData);
-        final now = DateTime.now();
-        _lastClientSync = now;
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setInt('lastClientSync', now.millisecondsSinceEpoch);
-        return true;
+      final batch = await ApiService.getBaseData('clientes', totalRecebido);
+
+      if (batch == null) {
+        sucesso = false;
+        break;
       }
-      return false;
-    } catch (e) {
-      debugPrint("Erro durante a sincronização de clientes: $e");
-      return false;
-    } finally {
-      _isSyncing = false;
-      _syncMessage = '';
-      _syncProgress = 0.0;
+      
+      await database.populateClientesFromAPI(batch);
+      
+      totalRecebido += batch.length;
+      _syncProgress = (totalRecebido / _totalClientesAprox).clamp(0.0, 1.0);
       notifyListeners();
+      
+      if (batch.length < 2000) break; // Condição de paragem
     }
+
+    if (sucesso) {
+      final now = DateTime.now();
+      _lastClientSync = now;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('lastClientSync', now.millisecondsSinceEpoch);
+      _syncMessage = 'Sincronização de clientes concluída!';
+    } else {
+      _syncMessage = _cancelSync ? 'Sincronização de clientes cancelada.' : 'Erro ao sincronizar clientes.';
+    }
+
+    _isSyncing = false;
+    _cancelSync = false;
+    notifyListeners();
+    return sucesso;
   }
   
+  // --- LÓGICA DE SINCRONIZAÇÃO DE PRODUTOS ---
   Future<bool> syncProdutosFromAPI() async {
-    if (_isSyncing) return false;
-
-    _isSyncing = true;
-    _isSyncCancelled = false;
+     _isSyncing = true;
+    _cancelSync = false;
     _syncProgress = 0.0;
-    _syncMessage = "A iniciar sincronização de produtos...";
+    _syncMessage = 'A iniciar sincronização de produtos...';
     notifyListeners();
+
+    await database.apagarTodosProdutos();
     
-    try {
-      final List<Map<String, dynamic>> allData = [];
-      int skip = 0;
-      const int batchSize = 2048;
-      const int totalApprox = 20000;
-
-      while (true) {
-        if (_isSyncCancelled) throw Exception("Sincronização cancelada pelo utilizador.");
-
-        _syncMessage = "A buscar produtos... (${allData.length}/~$totalApprox)";
-        _syncProgress = allData.length / totalApprox;
-        notifyListeners();
-
-        final List<dynamic>? batch = await ApiService.getBaseData('produtos', skip);
-        if (batch == null) throw Exception("Falha ao buscar dados da API.");
-
-        allData.addAll(batch.cast<Map<String, dynamic>>());
-
-        if (batch.length < batchSize) break;
-        skip += batchSize;
+    int totalRecebido = 0;
+    bool sucesso = true;
+    
+    while (true) {
+      if (_cancelSync) {
+        sucesso = false;
+        break;
       }
-      
-      _syncMessage = "A processar e guardar ${allData.length} produtos...";
+
+      _syncMessage = 'A buscar produtos... ($totalRecebido / ~$_totalProdutosAprox)';
       notifyListeners();
 
-      if (!_isSyncCancelled) {
-        await database.populateProdutosFromAPI(allData);
-        final now = DateTime.now();
-        _lastProductSync = now;
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setInt('lastProductSync', now.millisecondsSinceEpoch);
-        return true;
+      final batch = await ApiService.getBaseData('produtos', totalRecebido);
+
+      if (batch == null) {
+        sucesso = false;
+        break;
       }
-      return false;
-    } catch (e) {
-      debugPrint("Erro durante a sincronização de produtos: $e");
-      return false;
-    } finally {
-      _isSyncing = false;
-      _syncMessage = '';
-      _syncProgress = 0.0;
+
+      await database.populateProdutosFromAPI(batch);
+
+      totalRecebido += batch.length;
+       _syncProgress = (totalRecebido / _totalProdutosAprox).clamp(0.0, 1.0);
       notifyListeners();
+
+      if (batch.length < 2000) break;
     }
+
+    if (sucesso) {
+      final now = DateTime.now();
+      _lastProductSync = now;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('lastProductSync', now.millisecondsSinceEpoch);
+      _syncMessage = 'Sincronização de produtos concluída!';
+    } else {
+       _syncMessage = _cancelSync ? 'Sincronização de produtos cancelada.' : 'Erro ao sincronizar produtos.';
+    }
+
+    _isSyncing = false;
+    _cancelSync = false;
+    notifyListeners();
+    return sucesso;
   }
 
+  // --- LÓGICA DE SINCRONIZAÇÃO DE ENDEREÇOS ---
   Future<bool> syncEnderecosFromAPI() async {
-    if (_isSyncing) return false;
-
-    _isSyncing = true;
-    _isSyncCancelled = false;
+     _isSyncing = true;
+    _cancelSync = false;
     _syncProgress = 0.0;
-    _syncMessage = "A iniciar sincronização de endereços...";
+    _syncMessage = 'A iniciar sincronização de endereços...';
     notifyListeners();
 
-    try {
-      final List<Map<String, dynamic>> allData = [];
-      int skip = 0;
-      const int batchSize = 2048;
-      const int totalApprox = 100000;
+    await database.apagarTodosEnderecos();
+    
+    int totalRecebido = 0;
+    bool sucesso = true;
+    
+    while (true) {
+      if (_cancelSync) {
+        sucesso = false;
+        break;
+      }
+      _syncMessage = 'A buscar endereços... ($totalRecebido / ~$_totalEnderecosAprox)';
+      notifyListeners();
 
-      while (true) {
-        if (_isSyncCancelled) throw Exception("Sincronização cancelada pelo utilizador.");
+      final batch = await ApiService.getBaseData('enderecos', totalRecebido);
 
-        _syncMessage = "A buscar endereços... (${allData.length}/~$totalApprox)";
-        _syncProgress = allData.length / totalApprox;
-        notifyListeners();
-        
-        final List<dynamic>? batch = await ApiService.getBaseData('enderecos', skip);
-        if (batch == null) throw Exception("Falha ao buscar dados da API.");
-        
-        allData.addAll(batch.cast<Map<String, dynamic>>());
-
-        if (batch.length < batchSize) break;
-        skip += batchSize;
+      if (batch == null) {
+        sucesso = false;
+        break;
       }
       
-      _syncMessage = "A processar e guardar ${allData.length} endereços...";
+      await database.populateEnderecosFromAPI(batch);
+      
+      totalRecebido += batch.length;
+      _syncProgress = (totalRecebido / _totalEnderecosAprox).clamp(0.0, 1.0);
       notifyListeners();
-
-      if (!_isSyncCancelled) {
-        await database.populateEnderecosFromAPI(allData);
-        final now = DateTime.now();
-        _lastEnderecoSync = now;
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setInt('lastEnderecoSync', now.millisecondsSinceEpoch);
-        return true;
-      }
-      return false;
-    } catch (e) {
-      debugPrint("Erro durante a sincronização de endereços: $e");
-      return false;
-    } finally {
-      _isSyncing = false;
-      _syncMessage = '';
-      _syncProgress = 0.0;
-      notifyListeners();
+      
+      if (batch.length < 2000) break;
     }
+
+    if (sucesso) {
+      final now = DateTime.now();
+      _lastEnderecoSync = now;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('lastEnderecoSync', now.millisecondsSinceEpoch);
+      _syncMessage = 'Sincronização de endereços concluída!';
+    } else {
+      _syncMessage = _cancelSync ? 'Sincronização de endereços cancelada.' : 'Erro ao sincronizar endereços.';
+    }
+
+    _isSyncing = false;
+    _cancelSync = false;
+    notifyListeners();
+    return sucesso;
+  }
+
+  // Sincronização silenciosa para a rotina automática
+  Future<void> syncAllBasesSilently() async {
+    debugPrint('A iniciar sincronização automática em segundo plano...');
+    
+    final clientesOk = await syncClientesFromAPI();
+    if(clientesOk) debugPrint('Clientes sincronizados com sucesso.');
+
+    final produtosOk = await syncProdutosFromAPI();
+    if(produtosOk) debugPrint('Produtos sincronizados com sucesso.');
+
+    final enderecosOk = await syncEnderecosFromAPI();
+    if(enderecosOk) debugPrint('Endereços sincronizados com sucesso.');
+    
+    debugPrint('Sincronização automática concluída.');
   }
 
   Future<void> updatePendingOrderCount() async {

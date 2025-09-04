@@ -1,6 +1,6 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:drift/drift.dart' show Value;
+import 'dart:async';
 import '../../database.dart';
 
 class TelaPreCadastroCliente extends StatefulWidget {
@@ -21,14 +21,19 @@ class _TelaPreCadastroClienteState extends State<TelaPreCadastroCliente> {
   final _emailController = TextEditingController();
   final _croController = TextEditingController();
   
-  // Variáveis de estado para as novas funcionalidades
-  bool _declarationAccepted = false;
-  bool _isCheckingCpf = false;
-  bool _cpfJaExiste = false;
+  bool _clienteJaExiste = false;
   Timer? _debounce;
+  bool _consentimentoMarcado = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _cpfCnpjController.addListener(_onCpfCnpjChanged);
+  }
 
   @override
   void dispose() {
+    _cpfCnpjController.removeListener(_onCpfCnpjChanged);
     _debounce?.cancel();
     _nomeController.dispose();
     _cpfCnpjController.dispose();
@@ -41,86 +46,69 @@ class _TelaPreCadastroClienteState extends State<TelaPreCadastroCliente> {
     super.dispose();
   }
 
-  // Função para verificar o CPF/CNPJ com debounce
-  void _checkCpfCnpj(String value) {
+  void _onCpfCnpjChanged() {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
-    _debounce = Timer(const Duration(milliseconds: 700), () async {
-      if (value.isNotEmpty) {
-        setState(() => _isCheckingCpf = true);
-        final exists = await widget.database.clienteExistsByCpfCnpj(value);
+    _debounce = Timer(const Duration(milliseconds: 500), () async {
+      final cpfCnpj = _cpfCnpjController.text;
+      if (cpfCnpj.isNotEmpty) {
+        final existe = await widget.database.clienteExistsByCpfCnpj(cpfCnpj);
         if (mounted) {
           setState(() {
-            _cpfJaExiste = exists;
-            _isCheckingCpf = false;
+            _clienteJaExiste = existe;
           });
         }
       } else {
-         if (mounted) {
-            setState(() => _cpfJaExiste = false);
-         }
+        if (mounted) {
+          setState(() {
+            _clienteJaExiste = false;
+          });
+        }
       }
     });
   }
 
-
   void _salvarPreCadastro() async {
-    // Valida o formulário
-    if (!(_formKey.currentState?.validate() ?? false)) return;
+    if (_formKey.currentState!.validate() && !_clienteJaExiste && _consentimentoMarcado) {
+      final String preCadastroString = 
+        'Nome: ${_nomeController.text}\n'
+        'CPF/CNPJ: ${_cpfCnpjController.text}\n'
+        'Endereço: ${_enderecoController.text}, ${_cidadeController.text} - ${_estadoController.text}\n'
+        'Telefone: ${_telefoneController.text}\n'
+        'E-mail: ${_emailController.text}\n'
+        'CRO: ${_croController.text}';
 
-    // Verifica se o CPF já existe (última verificação)
-    if (_cpfJaExiste) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Este CPF/CNPJ já está cadastrado.'), backgroundColor: Colors.orange));
-      return;
+      final novoPreCadastro = PreCadastrosCompanion.insert(
+        nome: _nomeController.text,
+        cpfCnpj: Value(_cpfCnpjController.text),
+        enderecoCompleto: Value('${_enderecoController.text}, ${_cidadeController.text} - ${_estadoController.text}'),
+        telefone1: Value(_telefoneController.text),
+        email: Value(_emailController.text),
+        numeroCliente: (_croController.text), 
+        preCadastro: Value(preCadastroString),
+      );
+
+      await widget.database.inserePreCadastro(novoPreCadastro);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pré-Cadastro salvo com sucesso!')));
+      
+      _formKey.currentState?.reset();
+      _nomeController.clear();
+      _cpfCnpjController.clear();
+      _enderecoController.clear();
+      _cidadeController.clear();
+      _estadoController.clear();
+      _telefoneController.clear();
+      _emailController.clear();
+      _croController.clear();
+       setState(() {
+        _consentimentoMarcado = false;
+      });
     }
-
-    // Verifica se a declaração foi aceite
-    if (!_declarationAccepted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('É necessário aceitar a declaração de uso de dados.'), backgroundColor: Colors.orange));
-      return;
-    }
-
-    final String preCadastroString = 
-      'Nome: ${_nomeController.text}\n'
-      'CPF/CNPJ: ${_cpfCnpjController.text}\n'
-      'Endereço: ${_enderecoController.text}, ${_cidadeController.text} - ${_estadoController.text}\n'
-      'Telefone: ${_telefoneController.text}\n'
-      'E-mail: ${_emailController.text}\n'
-      'CRO: ${_croController.text}';
-
-    final novoPreCadastro = PreCadastrosCompanion.insert(
-      nome: _nomeController.text,
-      cpfCnpj: Value(_cpfCnpjController.text),
-      enderecoCompleto: Value('${_enderecoController.text}, ${_cidadeController.text} - ${_estadoController.text}'),
-      telefone1: Value(_telefoneController.text),
-      email: Value(_emailController.text),
-      numeroCliente: (_croController.text),
-      preCadastro: Value(preCadastroString),
-    );
-
-    await widget.database.inserePreCadastro(novoPreCadastro);
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pré-Cadastro salvo com sucesso!'), backgroundColor: Colors.green));
-    
-    // Limpa o formulário
-    _formKey.currentState?.reset();
-    _nomeController.clear();
-    _cpfCnpjController.clear();
-    _enderecoController.clear();
-    _cidadeController.clear();
-    _estadoController.clear();
-    _telefoneController.clear();
-    _emailController.clear();
-    _croController.clear();
-    setState(() {
-      _declarationAccepted = false;
-      _cpfJaExiste = false;
-    });
   }
 
   @override
   Widget build(BuildContext context) {
-    // O botão de salvar é desativado se o CPF já existir ou a declaração não for aceite
-    final bool canSave = !_cpfJaExiste && _declarationAccepted;
+    final isFormValid = !_clienteJaExiste && _consentimentoMarcado;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -139,13 +127,10 @@ class _TelaPreCadastroClienteState extends State<TelaPreCadastroCliente> {
               const SizedBox(height: 16),
               TextFormField(
                 controller: _cpfCnpjController,
-                onChanged: _checkCpfCnpj,
                 decoration: InputDecoration(
                   labelText: 'CPF / CNPJ',
                   border: const OutlineInputBorder(),
-                  // Mostra o erro ou um indicador de carregamento
-                  errorText: _cpfJaExiste ? 'Este CPF/CNPJ já está cadastrado.' : null,
-                  suffixIcon: _isCheckingCpf ? const Padding(padding: EdgeInsets.all(8.0), child: CircularProgressIndicator(strokeWidth: 2)) : null,
+                  errorText: _clienteJaExiste ? 'Este cliente já existe na base de dados.' : null,
                 ),
               ),
               const SizedBox(height: 16),
@@ -164,25 +149,26 @@ class _TelaPreCadastroClienteState extends State<TelaPreCadastroCliente> {
               TextFormField(controller: _emailController, decoration: const InputDecoration(labelText: 'E-mail', border: OutlineInputBorder())),
               const SizedBox(height: 16),
               TextFormField(controller: _croController, decoration: const InputDecoration(labelText: 'CRO', border: OutlineInputBorder())),
-              const SizedBox(height: 24),
-              // Checkbox de declaração
+              const SizedBox(height: 16),
               CheckboxListTile(
-                title: const Text('Declaro que informei ao cliente que os dados serão utilizados apenas para contato posterior.'),
-                value: _declarationAccepted,
-                onChanged: (value) => setState(() => _declarationAccepted = value!),
+                title: const Text("Declaro que informei ao cliente que os dados serão utilizados apenas para contato posterior"),
+                value: _consentimentoMarcado,
+                onChanged: (bool? value) {
+                  setState(() {
+                    _consentimentoMarcado = value ?? false;
+                  });
+                },
                 controlAffinity: ListTileControlAffinity.leading,
                 contentPadding: EdgeInsets.zero,
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 32),
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
-                  // O botão é desativado se as condições não forem cumpridas
-                  onPressed: canSave ? _salvarPreCadastro : null,
+                  onPressed: isFormValid ? _salvarPreCadastro : null,
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    // Muda a cor do botão quando está desativado
-                    backgroundColor: canSave ? null : Colors.grey.shade700,
+                    backgroundColor: isFormValid ? null : Colors.grey,
                   ),
                   child: const Text('Salvar Pré-Cadastro'),
                 ),
@@ -194,3 +180,4 @@ class _TelaPreCadastroClienteState extends State<TelaPreCadastroCliente> {
     );
   }
 }
+
