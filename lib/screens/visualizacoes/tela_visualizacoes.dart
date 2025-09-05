@@ -52,6 +52,11 @@ class TelaVisualizacoes extends StatelessWidget {
         icon: Icons.inventory_2,
         routeName: '/base_produtos',
       ),
+       VisualizacaoCardData(
+        title: 'Base de Categorias',
+        icon: Icons.category,
+        routeName: '/base_categorias',
+      ),
       VisualizacaoCardData(
         title: 'Base de Clientes',
         icon: Icons.people,
@@ -100,3 +105,4 @@ class TelaVisualizacoes extends StatelessWidget {
     );
   }
 }
+

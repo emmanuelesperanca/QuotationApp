@@ -20,6 +20,7 @@ import 'screens/pedido/tela_lista_produtos.dart';
 import 'screens/visualizacoes/tela_base_pre_cadastro.dart';
 import 'screens/visualizacoes/tela_base_enderecos_alternativos.dart';
 import 'screens/visualizacoes/tela_dashboard.dart';
+import 'screens/visualizacoes/tela_base_categorias.dart'; 
 
 
 void main() {
@@ -31,7 +32,7 @@ void main() {
         ChangeNotifierProvider(create: (_) => ThemeNotifier()),
         ChangeNotifierProvider(create: (_) => AppDataNotifier(database)),
         ChangeNotifierProvider(create: (_) => AuthNotifier()),
-        ChangeNotifierProvider(create: (_) => PedidoProvider(database)), // CORREÇÃO AQUI
+        ChangeNotifierProvider(create: (_) => PedidoProvider(database)),
       ],
       child: MyApp(database: database),
     ),
@@ -46,23 +47,32 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<ThemeNotifier>(
       builder: (context, themeNotifier, child) {
-        final baseTheme = ThemeData.dark();
-        final textTheme = GoogleFonts.leagueSpartanTextTheme(baseTheme.textTheme);
+        final baseTheme = themeNotifier.currentTheme.brightness == Brightness.dark 
+          ? ThemeData.dark()
+          : ThemeData.light();
+
+        final customTextTheme = GoogleFonts.leagueSpartanTextTheme(baseTheme.textTheme)
+            .apply(
+              bodyColor: baseTheme.colorScheme.onSurface,
+              displayColor: baseTheme.colorScheme.onSurface
+            )
+            .copyWith(
+              bodyLarge: baseTheme.textTheme.bodyLarge?.copyWith(fontSize: 15),
+              bodyMedium: baseTheme.textTheme.bodyMedium?.copyWith(fontSize: 14),
+              titleMedium: baseTheme.textTheme.titleMedium?.copyWith(fontSize: 17),
+              titleLarge: baseTheme.textTheme.titleLarge?.copyWith(fontSize: 23),
+              headlineSmall: baseTheme.textTheme.headlineSmall?.copyWith(fontSize: 25),
+              headlineMedium: baseTheme.textTheme.headlineMedium?.copyWith(fontSize: 29),
+            );
 
         return MaterialApp(
           title: 'Conecta Vendas',
           debugShowCheckedModeBanner: false,
           theme: baseTheme.copyWith(
-            textTheme: textTheme.copyWith(
-              bodyLarge: textTheme.bodyLarge?.copyWith(fontSize: 16),
-              bodyMedium: textTheme.bodyMedium?.copyWith(fontSize: 14),
-              titleMedium: textTheme.titleMedium?.copyWith(fontSize: 18),
-              titleLarge: textTheme.titleLarge?.copyWith(fontSize: 22),
-              headlineSmall: textTheme.headlineSmall?.copyWith(fontSize: 24),
-            ),
+            textTheme: customTextTheme,
             colorScheme: ColorScheme.fromSeed(
               seedColor: themeNotifier.currentTheme.primaryColor,
-              brightness: Brightness.dark,
+              brightness: themeNotifier.currentTheme.brightness,
             ),
           ),
           home: TelaLogin(database: database),
@@ -80,6 +90,7 @@ class MyApp extends StatelessWidget {
             '/base_pre_cadastro': (context) => TelaBasePreCadastro(database: database),
             '/base_enderecos_alternativos': (context) => TelaBaseEnderecosAlternativos(database: database),
             '/dashboard': (context) => TelaDashboard(database: database),
+            '/base_categorias': (context) => TelaBaseCategorias(database: database),
           },
         );
       },

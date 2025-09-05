@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:drift/drift.dart' show Value;
-import 'dart:async';
 import '../../database.dart';
 
 class TelaPreCadastroCliente extends StatefulWidget {
@@ -20,21 +19,19 @@ class _TelaPreCadastroClienteState extends State<TelaPreCadastroCliente> {
   final _telefoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _croController = TextEditingController();
-  
-  bool _clienteJaExiste = false;
-  Timer? _debounce;
-  bool _consentimentoMarcado = false;
+  bool _consentimento = false;
+  String? _cpfCnpjError;
+  bool _isValidatingCpf = false;
 
   @override
   void initState() {
     super.initState();
-    _cpfCnpjController.addListener(_onCpfCnpjChanged);
+    _cpfCnpjController.addListener(_validarCpfCnpj);
   }
 
   @override
   void dispose() {
-    _cpfCnpjController.removeListener(_onCpfCnpjChanged);
-    _debounce?.cancel();
+    _cpfCnpjController.removeListener(_validarCpfCnpj);
     _nomeController.dispose();
     _cpfCnpjController.dispose();
     _enderecoController.dispose();
@@ -46,29 +43,24 @@ class _TelaPreCadastroClienteState extends State<TelaPreCadastroCliente> {
     super.dispose();
   }
 
-  void _onCpfCnpjChanged() {
-    if (_debounce?.isActive ?? false) _debounce!.cancel();
-    _debounce = Timer(const Duration(milliseconds: 500), () async {
-      final cpfCnpj = _cpfCnpjController.text;
-      if (cpfCnpj.isNotEmpty) {
-        final existe = await widget.database.clienteExistsByCpfCnpj(cpfCnpj);
-        if (mounted) {
-          setState(() {
-            _clienteJaExiste = existe;
-          });
-        }
-      } else {
-        if (mounted) {
-          setState(() {
-            _clienteJaExiste = false;
-          });
-        }
+  void _validarCpfCnpj() async {
+    final text = _cpfCnpjController.text;
+    if (text.length > 10) { // Valida apenas para CPFs/CNPJs mais completos
+      setState(() => _isValidatingCpf = true);
+      final existe = await widget.database.clienteExistsByCpfCnpj(text);
+      if (mounted) {
+        setState(() {
+          _cpfCnpjError = existe ? 'Este CPF/CNPJ já existe na base de clientes.' : null;
+          _isValidatingCpf = false;
+        });
       }
-    });
+    } else {
+      setState(() => _cpfCnpjError = null);
+    }
   }
 
   void _salvarPreCadastro() async {
-    if (_formKey.currentState!.validate() && !_clienteJaExiste && _consentimentoMarcado) {
+    if (_formKey.currentState!.validate() && _consentimento && _cpfCnpjError == null) {
       final String preCadastroString = 
         'Nome: ${_nomeController.text}\n'
         'CPF/CNPJ: ${_cpfCnpjController.text}\n'
@@ -83,7 +75,7 @@ class _TelaPreCadastroClienteState extends State<TelaPreCadastroCliente> {
         enderecoCompleto: Value('${_enderecoController.text}, ${_cidadeController.text} - ${_estadoController.text}'),
         telefone1: Value(_telefoneController.text),
         email: Value(_emailController.text),
-        numeroCliente: (_croController.text), 
+        numeroCliente: (_croController.text),
         preCadastro: Value(preCadastroString),
       );
 
@@ -100,15 +92,13 @@ class _TelaPreCadastroClienteState extends State<TelaPreCadastroCliente> {
       _telefoneController.clear();
       _emailController.clear();
       _croController.clear();
-       setState(() {
-        _consentimentoMarcado = false;
-      });
+      setState(() => _consentimento = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final isFormValid = !_clienteJaExiste && _consentimentoMarcado;
+    final podeSalvar = _consentimento && _cpfCnpjError == null;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -130,7 +120,8 @@ class _TelaPreCadastroClienteState extends State<TelaPreCadastroCliente> {
                 decoration: InputDecoration(
                   labelText: 'CPF / CNPJ',
                   border: const OutlineInputBorder(),
-                  errorText: _clienteJaExiste ? 'Este cliente já existe na base de dados.' : null,
+                  errorText: _cpfCnpjError,
+                  suffixIcon: _isValidatingCpf ? const Padding(padding: EdgeInsets.all(8.0), child: CircularProgressIndicator()) : null,
                 ),
               ),
               const SizedBox(height: 16),
@@ -151,24 +142,20 @@ class _TelaPreCadastroClienteState extends State<TelaPreCadastroCliente> {
               TextFormField(controller: _croController, decoration: const InputDecoration(labelText: 'CRO', border: OutlineInputBorder())),
               const SizedBox(height: 16),
               CheckboxListTile(
-                title: const Text("Declaro que informei ao cliente que os dados serão utilizados apenas para contato posterior"),
-                value: _consentimentoMarcado,
-                onChanged: (bool? value) {
-                  setState(() {
-                    _consentimentoMarcado = value ?? false;
-                  });
-                },
+                title: const Text('Declaro que informei ao cliente que os dados serão utilizados apenas para contato posterior.'),
+                value: _consentimento,
+                onChanged: (value) => setState(() => _consentimento = value!),
                 controlAffinity: ListTileControlAffinity.leading,
                 contentPadding: EdgeInsets.zero,
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 16),
               SizedBox(
                 width: double.infinity,
                 child: FilledButton(
-                  onPressed: isFormValid ? _salvarPreCadastro : null,
+                  onPressed: podeSalvar ? _salvarPreCadastro : null,
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    backgroundColor: isFormValid ? null : Colors.grey,
+                    backgroundColor: podeSalvar ? null : Colors.grey,
                   ),
                   child: const Text('Salvar Pré-Cadastro'),
                 ),

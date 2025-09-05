@@ -9,6 +9,7 @@ import 'connection/native.dart' if (dart.library.html) 'connection/web.dart';
 part 'database.g.dart';
 
 // --- DEFINIÇÃO DAS TABELAS ---
+
 @DataClassName('Cliente')
 class Clientes extends Table {
   IntColumn get id => integer().autoIncrement()();
@@ -52,6 +53,17 @@ class Produtos extends Table {
   RealColumn get valor => real().named('Valor')();
 }
 
+@DataClassName('ProdutoCategoria')
+class ProdutoCategorias extends Table {
+  TextColumn get material => text().named('Material')();
+  TextColumn get phl4 => text().named('PHL4').nullable()();
+  TextColumn get phl5 => text().named('PHL5').nullable()();
+  TextColumn get phl6 => text().named('PHL6').nullable()();
+  TextColumn get brandTopNode => text().named('BrandTopNode').nullable()();
+  @override
+  Set<Column> get primaryKey => {material};
+}
+
 @DataClassName('PedidoPendente')
 class PedidosPendentes extends Table {
   IntColumn get id => integer().autoIncrement()();
@@ -75,14 +87,20 @@ class RankingItem {
   RankingItem({required this.nome, required this.contagem});
 }
 
+class ProdutoComCategoria {
+  final Produto produto;
+  final ProdutoCategoria? categoria;
+  ProdutoComCategoria({required this.produto, this.categoria});
+}
+
 
 // --- O BANCO DE DADOS ---
-@DriftDatabase(tables: [Clientes, Produtos, PedidosPendentes, PedidosEnviados, PreCadastros, EnderecosAlternativos])
+@DriftDatabase(tables: [Clientes, Produtos, PedidosPendentes, PedidosEnviados, PreCadastros, EnderecosAlternativos, ProdutoCategorias])
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(openConnection());
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -108,12 +126,14 @@ class AppDatabase extends _$AppDatabase {
         await m.addColumn(pedidosEnviados, pedidosEnviados.status);
         await m.addColumn(pedidosEnviados, pedidosEnviados.obsCentral);
       }
+      if (from < 6) {
+        await m.createTable(produtoCategorias);
+      }
     }
   );
 
   // --- MÉTODOS DE CLIENTE ---
   Future<List<Cliente>> getTodosClientes() => select(clientes).get();
-  Future<void> insereCliente(ClientesCompanion cliente) => into(clientes).insert(cliente);
   Future<List<Cliente>> searchClientes(String query) {
     return (select(clientes)
           ..where((c) => c.nome.like('%$query%') | c.cpfCnpj.like('%$query%') | c.numeroCliente.like('%$query%')))
@@ -123,7 +143,7 @@ class AppDatabase extends _$AppDatabase {
   Future<int> countClientes() async {
     final countExp = clientes.id.count();
     final query = selectOnly(clientes)..addColumns([countExp]);
-    return (await query.map((row) => row.read(countExp)).getSingle()) ?? 0;
+    return (await query.getSingle()).read(countExp) ?? 0;
   }
    Future<bool> clienteExistsByCpfCnpj(String cpfCnpj) async {
     final result = await (select(clientes)..where((tbl) => tbl.cpfCnpj.equals(cpfCnpj))).get();
@@ -154,10 +174,10 @@ class AppDatabase extends _$AppDatabase {
   }
   Future<void> apagarTodosPreCadastros() => delete(preCadastros).go();
 
-  // --- MÉTODOS DE ENDEREÇOS ALTERNATIVOS ---
+  // --- MÉTODOS DE ENDEREÇOS ---
   Future<List<EnderecoAlternativo>> getTodosEnderecosAlternativos() => select(enderecosAlternativos).get();
   Future<List<EnderecoAlternativo>> searchEnderecosAlternativos(String query) {
-    return (select(enderecosAlternativos)
+     return (select(enderecosAlternativos)
           ..where((e) => e.enderecoFormatado.like('%$query%') | e.numeroCliente.like('%$query%') | e.cpfCnpj.like('%$query%')))
         .get();
   }
@@ -168,7 +188,7 @@ class AppDatabase extends _$AppDatabase {
    Future<int> countEnderecos() async {
     final countExp = enderecosAlternativos.id.count();
     final query = selectOnly(enderecosAlternativos)..addColumns([countExp]);
-    return (await query.map((row) => row.read(countExp)).getSingle()) ?? 0;
+    return (await query.getSingle()).read(countExp) ?? 0;
   }
   Future<void> populateEnderecosFromAPI(List<dynamic> data) async {
     await batch((batch) {
@@ -181,12 +201,10 @@ class AppDatabase extends _$AppDatabase {
     });
   }
 
-
   // --- MÉTODOS DE PRODUTO ---
   Future<Produto?> getProdutoPorCod(String cod) {
     return (select(produtos)..where((p) => p.referencia.equals(cod))).getSingleOrNull();
   }
-  
   Future<List<Produto>> getTodosProdutos() => select(produtos).get();
   Future<List<Produto>> searchProdutos(String query) {
     return (select(produtos)
@@ -200,7 +218,7 @@ class AppDatabase extends _$AppDatabase {
    Future<int> countProdutos() async {
     final countExp = produtos.id.count();
     final query = selectOnly(produtos)..addColumns([countExp]);
-    return (await query.map((row) => row.read(countExp)).getSingle()) ?? 0;
+    return (await query.getSingle()).read(countExp) ?? 0;
   }
   Future<void> populateProdutosFromAPI(List<dynamic> data) async {
     await batch((batch) {
@@ -213,39 +231,39 @@ class AppDatabase extends _$AppDatabase {
     });
   }
 
+  // --- MÉTODOS PARA CATEGORIAS ---
+  Future<List<ProdutoCategoria>> getTodasCategorias() => select(produtoCategorias).get();
+  Future<List<ProdutoCategoria>> searchCategorias(String query) {
+    return (select(produtoCategorias)
+          ..where((c) => c.material.like('%$query%') | c.brandTopNode.like('%$query%')))
+        .get();
+  }
+  Future<void> apagarTodasCategorias() => delete(produtoCategorias).go();
+  Future<int> countCategorias() async {
+    final countExp = produtoCategorias.material.count();
+    final query = selectOnly(produtoCategorias)..addColumns([countExp]);
+    return (await query.getSingle()).read(countExp) ?? 0;
+  }
+  Future<void> populateCategoriasFromAPI(List<dynamic> data) async {
+    await batch((batch) {
+      final companions = data.map((row) => ProdutoCategoriasCompanion.insert(
+        material: row['Material']?.toString() ?? '',
+        phl4: Value(row['PHL4: Platform/Type']?.toString()),
+        phl5: Value(row['PHL5: Retention/Interphase']?.toString()),
+        phl6: Value(row['PHL6: Material / Surface / Detail']?.toString()),
+        brandTopNode: Value(row['Brand Top Node']?.toString()),
+      )).toList();
+      batch.insertAll(produtoCategorias, companions, mode: InsertMode.insertOrReplace);
+    });
+  }
 
-  // --- MÉTODOS DE PEDIDOS ---
+
+  // --- MÉTODOS DE PEDIDOS E DASHBOARD ---
   Future<List<PedidoPendente>> getTodosPedidosPendentes() => (select(pedidosPendentes)..orderBy([(t) => OrderingTerm.desc(t.id)])).get();
   Future<List<PedidoEnviado>> getTodosPedidosEnviados() => (select(pedidosEnviados)..orderBy([(t) => OrderingTerm.desc(t.dataEnvio)])).get();
-  
   Future<List<PedidoEnviado>> searchPedidosEnviados(String codCliente) {
     return (select(pedidosEnviados)..where((p) => p.pedidoJson.like('%"cod_cliente": "$codCliente"%'))).get();
   }
-
-  Future<int> countPedidosPendentes() async {
-    final count = pedidosPendentes.id.count();
-    final query = selectOnly(pedidosPendentes)..addColumns([count]);
-    return await query.map((row) => row.read(count) ?? 0).getSingle();
-  }
-
-  Future<void> inserePedidoPendente(String json) {
-    final companion = PedidosPendentesCompanion.insert(pedidoJson: json);
-    return into(pedidosPendentes).insert(companion);
-  }
-
-  Future<void> deletaPedidoPendente(int id) {
-    return (delete(pedidosPendentes)..where((tbl) => tbl.id.equals(id))).go();
-  }
-  
-  Future<void> inserePedidoEnviado(String json, String appPedidoId) {
-    final companion = PedidosEnviadosCompanion.insert(
-      pedidoJson: json,
-      appPedidoId: Value(appPedidoId),
-      dataEnvio: DateTime.now(),
-    );
-    return into(pedidosEnviados).insert(companion);
-  }
-
   Future<void> updateStatusPedidoEnviado(String appPedidoId, String numeroPedidoSap, String status, String obsCentral) {
     return (update(pedidosEnviados)..where((tbl) => tbl.appPedidoId.equals(appPedidoId))).write(
       PedidosEnviadosCompanion(
@@ -255,21 +273,35 @@ class AppDatabase extends _$AppDatabase {
       ),
     );
   }
-
-  Future<void> apagarTodosPedidosEnviados() => delete(pedidosEnviados).go();
   Future<void> apagarTodosPedidosPendentes() => delete(pedidosPendentes).go();
-
-
-  // --- MÉTODOS DO DASHBOARD ---
+  Future<void> apagarTodosPedidosEnviados() => delete(pedidosEnviados).go();
+  Future<int> countPedidosPendentes() async {
+    final count = pedidosPendentes.id.count();
+    final query = selectOnly(pedidosPendentes)..addColumns([count]);
+    return (await query.getSingle()).read(count) ?? 0;
+  }
+  Future<void> inserePedidoPendente(String json) {
+    final companion = PedidosPendentesCompanion.insert(pedidoJson: json);
+    return into(pedidosPendentes).insert(companion);
+  }
+  Future<void> deletaPedidoPendente(int id) {
+    return (delete(pedidosPendentes)..where((tbl) => tbl.id.equals(id))).go();
+  }
+  Future<void> inserePedidoEnviado(String json, String appPedidoId) {
+    final companion = PedidosEnviadosCompanion.insert(
+      pedidoJson: json,
+      appPedidoId: Value(appPedidoId),
+      dataEnvio: DateTime.now(),
+    );
+    return into(pedidosEnviados).insert(companion);
+  }
   Future<int> countPedidosEnviados() async {
     final countExp = pedidosEnviados.id.count();
     final query = selectOnly(pedidosEnviados)..addColumns([countExp]);
-    final result = await query.map((row) => row.read(countExp)).getSingle();
-    return result ?? 0;
+    return (await query.getSingle()).read(countExp) ?? 0;
   }
-
   Future<double> sumTotalPedidosEnviados() async {
-    final pedidos = await getTodosPedidosEnviados();
+    final pedidos = await (select(pedidosEnviados)).get();
     double total = 0.0;
     for (var pedido in pedidos) {
       final data = jsonDecode(pedido.pedidoJson);
@@ -277,9 +309,8 @@ class AppDatabase extends _$AppDatabase {
     }
     return total;
   }
-
   Future<List<RankingItem>> getTopProdutosVendidos(int limit) async {
-    final pedidos = await getTodosPedidosEnviados();
+    final pedidos = await (select(pedidosEnviados)).get();
     final Map<String, int> contagem = {};
 
     for (var pedido in pedidos) {
@@ -293,17 +324,11 @@ class AppDatabase extends _$AppDatabase {
       }
     }
     
-    final sortedItems = contagem.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-      
-    return sortedItems
-        .take(limit)
-        .map((e) => RankingItem(nome: e.key, contagem: e.value))
-        .toList();
+    final sortedItems = contagem.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    return sortedItems.take(limit).map((e) => RankingItem(nome: e.key, contagem: e.value)).toList();
   }
-  
   Future<List<RankingItem>> getTopClientes(int limit) async {
-    final pedidos = await getTodosPedidosEnviados();
+    final pedidos = await (select(pedidosEnviados)).get();
     final Map<String, int> contagem = {};
 
     for (var pedido in pedidos) {
@@ -312,23 +337,15 @@ class AppDatabase extends _$AppDatabase {
         contagem[cliente] = (contagem[cliente] ?? 0) + 1;
     }
 
-    final sortedItems = contagem.entries.toList()
-      ..sort((a, b) => b.value.compareTo(a.value));
-      
-    return sortedItems
-        .take(limit)
-        .map((e) => RankingItem(nome: e.key, contagem: e.value))
-        .toList();
+    final sortedItems = contagem.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    return sortedItems.take(limit).map((e) => RankingItem(nome: e.key, contagem: e.value)).toList();
   }
-
   Future<Map<String, int>> getPedidosNosUltimosDias(int days) async {
     final hoje = DateTime.now();
     final Map<String, int> contagemDias = {};
-
-    for (int i = days - 1; i >= 0; i--) {
+    for (int i = days -1; i >= 0; i--) {
       final dia = hoje.subtract(Duration(days: i));
-      final diaFormatado = '${dia.day}/${dia.month}';
-      contagemDias[diaFormatado] = 0;
+      contagemDias['${dia.day}/${dia.month}'] = 0;
     }
 
     final query = select(pedidosEnviados)..where((tbl) => tbl.dataEnvio.isBetweenValues(hoje.subtract(Duration(days: days)), hoje));

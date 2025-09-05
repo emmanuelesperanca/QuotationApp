@@ -13,8 +13,7 @@ class TelaBaseCategorias extends StatefulWidget {
 }
 
 class _TelaBaseCategoriasState extends State<TelaBaseCategorias> {
-  // O Future agora é para a classe que une Produto e Categoria
-  late Future<List<ProdutoComCategoria>> _produtosComCategoriaFuture;
+  late Future<List<ProdutoCategoria>> _categoriasFuture;
   int _totalCategorias = 0;
 
   @override
@@ -25,8 +24,7 @@ class _TelaBaseCategoriasState extends State<TelaBaseCategorias> {
 
   void _refreshList() {
     setState(() {
-      // Usaremos um método de busca genérico para carregar todos no início
-      _produtosComCategoriaFuture = widget.database.searchProdutosPorCategoria({});
+      _categoriasFuture = widget.database.getTodasCategorias();
       widget.database.countCategorias().then((count) {
         if (mounted) setState(() => _totalCategorias = count);
       });
@@ -53,7 +51,10 @@ class _TelaBaseCategoriasState extends State<TelaBaseCategorias> {
         title: const Text('Confirmar Ação'),
         content: const Text('Tem a certeza de que pretende limpar toda a base de categorias? Esta ação não pode ser desfeita.'),
         actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
           FilledButton(
             onPressed: () => Navigator.of(context).pop(true),
             child: const Text('Limpar'),
@@ -78,7 +79,7 @@ class _TelaBaseCategoriasState extends State<TelaBaseCategorias> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: const Text('Base de Categorias de Produtos'),
+        title: const Text('Base de Categorias'),
         backgroundColor: Colors.black.withOpacity(0.5),
         actions: [
           if (auth.username == 'admin')
@@ -95,6 +96,11 @@ class _TelaBaseCategoriasState extends State<TelaBaseCategorias> {
             padding: const EdgeInsets.all(8.0),
             child: Column(
               children: [
+                TextField(
+                  decoration: const InputDecoration(labelText: 'Pesquisar por material ou marca...', border: OutlineInputBorder(), prefixIcon: Icon(Icons.search)),
+                  onChanged: (value) => setState(() => _categoriasFuture = widget.database.searchCategorias(value)),
+                ),
+                const SizedBox(height: 8),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -114,7 +120,7 @@ class _TelaBaseCategoriasState extends State<TelaBaseCategorias> {
                       )
                   ],
                 ),
-                 if (appData.isSyncing)
+                if (appData.isSyncing)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8.0),
                     child: Column(
@@ -129,26 +135,32 @@ class _TelaBaseCategoriasState extends State<TelaBaseCategorias> {
             ),
           ),
           Expanded(
-            child: FutureBuilder<List<ProdutoComCategoria>>(
-              future: _produtosComCategoriaFuture,
+            child: FutureBuilder<List<ProdutoCategoria>>(
+              future: _categoriasFuture,
               builder: (context, snapshot) {
                  if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 8),
+                        Text('A carregar base de dados...'),
+                      ],
+                    ),
+                  );
                 }
                 if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("Nenhuma categoria encontrada."));
                 
-                final produtos = snapshot.data!;
+                final categorias = snapshot.data!;
                 return ListView.builder(
-                  itemCount: produtos.length,
+                  itemCount: categorias.length,
                   itemBuilder: (context, index) {
-                    final item = produtos[index];
+                    final categoria = categorias[index];
                     return ListTile(
                       leading: const Icon(Icons.category_outlined),
-                      title: Text(item.produto.descricao),
-                      subtitle: Text(
-                        'Cód: ${item.produto.referencia} | Marca: ${item.categoria?.brandTopNode ?? "N/A"}',
-                        style: const TextStyle(fontSize: 12),
-                      ),
+                      title: Text(categoria.material),
+                      subtitle: Text('Marca: ${categoria.brandTopNode ?? 'N/A'} | Tipo: ${categoria.phl4 ?? 'N/A'}'),
                     );
                   },
                 );
@@ -160,3 +172,4 @@ class _TelaBaseCategoriasState extends State<TelaBaseCategorias> {
     );
   }
 }
+

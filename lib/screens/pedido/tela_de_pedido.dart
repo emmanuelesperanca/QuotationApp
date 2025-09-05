@@ -11,7 +11,7 @@ import '../../providers/pedido_provider.dart';
 import 'tela_lista_produtos.dart';
 import 'tela_selecao_promocao.dart';
 import '../../pdf_service.dart';
-import '../../models/promocao.dart'; // IMPORTAÇÃO ADICIONADA
+import '../../models/promocao.dart';
 
 class TelaDePedido extends StatefulWidget {
   final AppDatabase database;
@@ -75,6 +75,7 @@ class _TelaDePedidoState extends State<TelaDePedido> {
   }
 
   Future<void> _mostrarConfirmacaoPedido() async {
+    if (!mounted) return;
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(

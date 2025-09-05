@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
+import 'package:fl_chart/fl_chart.dart';
 import '../../database.dart';
 import '../../providers/app_data_notifier.dart';
+import 'package:provider/provider.dart';
+import '../../models/app_theme.dart';
 import '../../providers/theme_notifier.dart';
 
 class TelaDashboard extends StatefulWidget {
@@ -17,7 +18,6 @@ class TelaDashboard extends StatefulWidget {
 class _TelaDashboardState extends State<TelaDashboard> {
   Future<int>? _totalPedidosFuture;
   Future<double>? _valorTotalFuture;
-  Future<int>? _pedidosPendentesFuture;
   Future<List<RankingItem>>? _topProdutosFuture;
   Future<List<RankingItem>>? _topClientesFuture;
   Future<Map<String, int>>? _pedidosSemanaFuture;
@@ -25,14 +25,13 @@ class _TelaDashboardState extends State<TelaDashboard> {
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _loadDashboardData();
   }
 
-  void _loadData() {
+  void _loadDashboardData() {
     setState(() {
       _totalPedidosFuture = widget.database.countPedidosEnviados();
       _valorTotalFuture = widget.database.sumTotalPedidosEnviados();
-      _pedidosPendentesFuture = widget.database.countPedidosPendentes();
       _topProdutosFuture = widget.database.getTopProdutosVendidos(5);
       _topClientesFuture = widget.database.getTopClientes(5);
       _pedidosSemanaFuture = widget.database.getPedidosNosUltimosDias(7);
@@ -41,9 +40,9 @@ class _TelaDashboardState extends State<TelaDashboard> {
 
   @override
   Widget build(BuildContext context) {
+    final appData = Provider.of<AppDataNotifier>(context);
     final themeNotifier = Provider.of<ThemeNotifier>(context);
-    final appData = Provider.of<AppDataNotifier>(context, listen: false);
-    final currencyFormat = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$');
+    final theme = themeNotifier.currentTheme;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -53,7 +52,7 @@ class _TelaDashboardState extends State<TelaDashboard> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _loadData,
+            onPressed: _loadDashboardData,
             tooltip: 'Atualizar Dados',
           ),
         ],
@@ -66,82 +65,99 @@ class _TelaDashboardState extends State<TelaDashboard> {
             Row(
               children: [
                 Expanded(
-                  child: FutureBuilder<double>(
-                    future: _valorTotalFuture,
-                    builder: (context, snapshot) => _buildKpiCard(
-                      title: 'Valor Total Faturado',
-                      value: snapshot.hasData ? currencyFormat.format(snapshot.data) : '...',
-                      icon: Icons.monetization_on,
-                      color: Colors.green.shade800,
-                    ),
+                  child: _buildKpiCard(
+                    title: 'Total de Pedidos Enviados',
+                    future: _totalPedidosFuture,
+                    formatter: (value) => (value as int).toString(),
+                    icon: Icons.shopping_cart,
+                    color: theme.primaryColor,
                   ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
-                  child: FutureBuilder<int>(
-                    future: _totalPedidosFuture,
-                    builder: (context, snapshot) => _buildKpiCard(
-                      title: 'Total de Pedidos Enviados',
-                      value: snapshot.hasData ? snapshot.data.toString() : '...',
-                      icon: Icons.check_circle,
-                      color: themeNotifier.currentTheme.primaryColor,
-                    ),
+                  child: _buildKpiCard(
+                    title: 'Valor Total Faturado',
+                    future: _valorTotalFuture,
+                    formatter: (value) => 'R\$ ${NumberFormat.compact().format(value)}',
+                    icon: Icons.attach_money,
+                    color: Colors.green.shade700,
                   ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: _buildKpiCard(
                     title: 'Pedidos Pendentes',
-                    value: appData.pendingOrderCount.toString(),
-                    icon: Icons.warning,
+                    value: appData.pendingOrderCount, // Valor direto do provider
+                    formatter: (value) => (value as int).toString(),
+                    icon: Icons.pending_actions,
                     color: Colors.orange.shade800,
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 24),
-
-            // --- RANKINGS ---
+            // --- Gráficos e Rankings ---
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // --- Gráfico de Barras ---
                 Expanded(
-                  child: _buildRankingCard<RankingItem>(
-                    title: 'Top 5 Produtos Mais Vendidos',
-                    future: _topProdutosFuture,
-                    itemBuilder: (item) => ListTile(
-                      leading: const Icon(Icons.inventory_2),
-                      title: Text(item.nome),
-                      trailing: Text(item.contagem.toString(), style: const TextStyle(fontWeight: FontWeight.bold)),
+                  flex: 2,
+                  child: _buildSectionCard(
+                    title: 'Pedidos nos Últimos 7 Dias',
+                    child: FutureBuilder<Map<String, int>>(
+                      future: _pedidosSemanaFuture,
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
+                        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                          return const Center(child: Text('Sem dados recentes.'));
+                        }
+                        return SizedBox(
+                          height: 300,
+                          child: _buildBarChart(snapshot.data!, theme),
+                        );
+                      },
                     ),
                   ),
                 ),
                 const SizedBox(width: 16),
+                // --- Rankings ---
                 Expanded(
-                  child: _buildRankingCard<RankingItem>(
-                    title: 'Top 5 Clientes',
-                    future: _topClientesFuture,
-                    itemBuilder: (item) => ListTile(
-                      leading: const Icon(Icons.person),
-                      title: Text(item.nome),
-                      trailing: Text('${item.contagem} pedidos', style: const TextStyle(fontWeight: FontWeight.bold)),
-                    ),
+                  flex: 1,
+                  child: Column(
+                    children: [
+                      _buildRankingCard(
+                        title: 'Top 5 Produtos Mais Vendidos',
+                        future: _topProdutosFuture,
+                        icon: Icons.inventory_2,
+                      ),
+                      const SizedBox(height: 16),
+                      _buildRankingCard(
+                        title: 'Top 5 Clientes',
+                        future: _topClientesFuture,
+                        icon: Icons.people,
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 24),
-
-            // --- GRÁFICO DE ATIVIDADE SEMANAL ---
-            _buildChartCard(),
           ],
         ),
       ),
     );
   }
-  
-  // --- WIDGETS AUXILIARES ---
-  Widget _buildKpiCard({required String title, required String value, required IconData icon, required Color color}) {
+
+   Widget _buildKpiCard({
+    required String title,
+    Future<num>? future,
+    num? value,
+    required String Function(num) formatter,
+    required IconData icon,
+    required Color color,
+  }) {
     return Card(
       elevation: 4,
       color: color.withOpacity(0.8),
@@ -151,117 +167,146 @@ class _TelaDashboardState extends State<TelaDashboard> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Icon(icon, size: 32, color: Colors.white),
-            const SizedBox(height: 12),
-            Text(value, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white)),
-            Text(title, style: const TextStyle(fontSize: 14, color: Colors.white70)),
+            const SizedBox(height: 8),
+            Text(title, style: const TextStyle(color: Colors.white70)),
+            const SizedBox(height: 4),
+            if (future != null)
+              FutureBuilder<num>(
+                future: future,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const SizedBox(height: 28, width: 28, child: CircularProgressIndicator(color: Colors.white));
+                  }
+                  final displayValue = formatter(snapshot.data ?? 0);
+                  return Text(displayValue, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white));
+                },
+              )
+            else
+              Text(formatter(value ?? 0), style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white)),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildRankingCard<T>({required String title, required Future<List<T>?>? future, required Widget Function(T) itemBuilder}) {
+  Widget _buildSectionCard({required String title, required Widget child}) {
     return Card(
-      elevation: 4,
-      color: Colors.black.withOpacity(0.4),
+      elevation: 2,
+      color: Colors.black.withOpacity(0.3),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(title, style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 8),
-            FutureBuilder<List<T>?>(
-              future: future,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-                if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text('Nenhum dado disponível.'));
-                return ListView.separated(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: snapshot.data!.length,
-                  itemBuilder: (context, index) => itemBuilder(snapshot.data![index]),
-                  separatorBuilder: (context, index) => const Divider(),
-                );
-              },
-            )
+            const SizedBox(height: 16),
+            child,
           ],
         ),
       ),
     );
   }
 
-  Widget _buildChartCard() {
-    final themeNotifier = Provider.of<ThemeNotifier>(context);
-    return Card(
-      elevation: 4,
-      color: Colors.black.withOpacity(0.4),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Atividade nos Últimos 7 Dias', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 24),
-            SizedBox(
-              height: 250,
-              child: FutureBuilder<Map<String, int>>(
-                future: _pedidosSemanaFuture,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
-                  if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text('Nenhum dado.'));
-                  
-                  final data = snapshot.data!;
-                  final maxValue = data.values.fold(0, (max, v) => v > max ? v : max).toDouble();
+  Widget _buildRankingCard({
+    required String title,
+    required Future<List<RankingItem>>? future,
+    required IconData icon,
+  }) {
+    return _buildSectionCard(
+      title: title,
+      child: FutureBuilder<List<RankingItem>>(
+        future: future,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return const Center(child: Text('Sem dados.'));
+          }
+          return Column(
+            children: snapshot.data!.asMap().entries.map((entry) {
+              final index = entry.key;
+              final item = entry.value;
+              return ListTile(
+                leading: CircleAvatar(child: Text('${index + 1}')),
+                title: Text(item.nome, overflow: TextOverflow.ellipsis),
+                trailing: Text(item.contagem.toString(), style: Theme.of(context).textTheme.bodyLarge),
+              );
+            }).toList(),
+          );
+        },
+      ),
+    );
+  }
 
-                  return BarChart(
-                    BarChartData(
-                      maxY: maxValue * 1.2, // Um pouco de espaço no topo
-                      barTouchData: BarTouchData(
-                        touchTooltipData: BarTouchTooltipData(
-                          getTooltipItem: (group, groupIndex, rod, rodIndex) => BarTooltipItem(
-                            '${rod.toY.round()} pedidos',
-                            const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ),
-                      titlesData: FlTitlesData(
-                        show: true,
-                        rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                        topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                        bottomTitles: AxisTitles(
-                          sideTitles: SideTitles(
-                            showTitles: true,
-                            getTitlesWidget: (value, meta) => SideTitleWidget(axisSide: meta.axisSide, child: Text(data.keys.elementAt(value.toInt()), style: const TextStyle(fontSize: 10))),
-                            reservedSize: 38,
-                          ),
-                        ),
-                        leftTitles: AxisTitles(
-                          sideTitles: SideTitles(showTitles: true, reservedSize: 28),
-                        ),
-                      ),
-                      borderData: FlBorderData(show: false),
-                      barGroups: data.entries.map((e) {
-                        final index = data.keys.toList().indexOf(e.key);
-                        return BarChartGroupData(
-                          x: index,
-                          barRods: [
-                            BarChartRodData(
-                              toY: e.value.toDouble(),
-                              color: themeNotifier.currentTheme.secondaryColor,
-                              width: 22,
-                              borderRadius: BorderRadius.circular(4),
-                            )
-                          ],
-                        );
-                      }).toList(),
-                    ),
-                  );
-                },
-              ),
+  Widget _buildBarChart(Map<String, int> data, AppTheme theme) {
+    final barGroups = data.entries.map((entry) {
+      final x = data.keys.toList().indexOf(entry.key);
+      return BarChartGroupData(
+        x: x,
+        barRods: [
+          BarChartRodData(
+            toY: entry.value.toDouble(),
+            color: theme.primaryColor,
+            width: 20,
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(6),
+              topRight: Radius.circular(6),
             ),
-          ],
+          ),
+        ],
+      );
+    }).toList();
+
+    return BarChart(
+      BarChartData(
+        alignment: BarChartAlignment.spaceAround,
+        maxY: (data.values.isEmpty ? 10 : data.values.reduce((a, b) => a > b ? a : b)) * 1.2,
+        barTouchData: BarTouchData(
+          touchTooltipData: BarTouchTooltipData(
+            getTooltipItem: (group, groupIndex, rod, rodIndex) {
+              final dia = data.keys.elementAt(group.x);
+              return BarTooltipItem(
+                '$dia\n',
+                const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                children: <TextSpan>[
+                  TextSpan(
+                    text: rod.toY.toInt().toString(),
+                    style: TextStyle(
+                      color: theme.secondaryColor,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
         ),
+        titlesData: FlTitlesData(
+          show: true,
+          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              getTitlesWidget: (value, meta) {
+                final index = value.toInt();
+                if (index >= 0 && index < data.keys.length) {
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 6.0),
+                    child: Text(data.keys.elementAt(index)),
+                  );
+                }
+                return const Text('');
+              },
+              reservedSize: 38,
+            ),
+          ),
+        ),
+        borderData: FlBorderData(show: false),
+        barGroups: barGroups,
+        gridData: const FlGridData(show: true, drawVerticalLine: false),
       ),
     );
   }

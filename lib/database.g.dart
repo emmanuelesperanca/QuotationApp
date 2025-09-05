@@ -2065,6 +2065,318 @@ class EnderecosAlternativosCompanion
   }
 }
 
+class $ProdutoCategoriasTable extends ProdutoCategorias
+    with TableInfo<$ProdutoCategoriasTable, ProdutoCategoria> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ProdutoCategoriasTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _materialMeta =
+      const VerificationMeta('material');
+  @override
+  late final GeneratedColumn<String> material = GeneratedColumn<String>(
+      'Material', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _phl4Meta = const VerificationMeta('phl4');
+  @override
+  late final GeneratedColumn<String> phl4 = GeneratedColumn<String>(
+      'PHL4', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _phl5Meta = const VerificationMeta('phl5');
+  @override
+  late final GeneratedColumn<String> phl5 = GeneratedColumn<String>(
+      'PHL5', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _phl6Meta = const VerificationMeta('phl6');
+  @override
+  late final GeneratedColumn<String> phl6 = GeneratedColumn<String>(
+      'PHL6', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  static const VerificationMeta _brandTopNodeMeta =
+      const VerificationMeta('brandTopNode');
+  @override
+  late final GeneratedColumn<String> brandTopNode = GeneratedColumn<String>(
+      'BrandTopNode', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
+  @override
+  List<GeneratedColumn> get $columns =>
+      [material, phl4, phl5, phl6, brandTopNode];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'produto_categorias';
+  @override
+  VerificationContext validateIntegrity(Insertable<ProdutoCategoria> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('Material')) {
+      context.handle(_materialMeta,
+          material.isAcceptableOrUnknown(data['Material']!, _materialMeta));
+    } else if (isInserting) {
+      context.missing(_materialMeta);
+    }
+    if (data.containsKey('PHL4')) {
+      context.handle(
+          _phl4Meta, phl4.isAcceptableOrUnknown(data['PHL4']!, _phl4Meta));
+    }
+    if (data.containsKey('PHL5')) {
+      context.handle(
+          _phl5Meta, phl5.isAcceptableOrUnknown(data['PHL5']!, _phl5Meta));
+    }
+    if (data.containsKey('PHL6')) {
+      context.handle(
+          _phl6Meta, phl6.isAcceptableOrUnknown(data['PHL6']!, _phl6Meta));
+    }
+    if (data.containsKey('BrandTopNode')) {
+      context.handle(
+          _brandTopNodeMeta,
+          brandTopNode.isAcceptableOrUnknown(
+              data['BrandTopNode']!, _brandTopNodeMeta));
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {material};
+  @override
+  ProdutoCategoria map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return ProdutoCategoria(
+      material: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}Material'])!,
+      phl4: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}PHL4']),
+      phl5: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}PHL5']),
+      phl6: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}PHL6']),
+      brandTopNode: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}BrandTopNode']),
+    );
+  }
+
+  @override
+  $ProdutoCategoriasTable createAlias(String alias) {
+    return $ProdutoCategoriasTable(attachedDatabase, alias);
+  }
+}
+
+class ProdutoCategoria extends DataClass
+    implements Insertable<ProdutoCategoria> {
+  final String material;
+  final String? phl4;
+  final String? phl5;
+  final String? phl6;
+  final String? brandTopNode;
+  const ProdutoCategoria(
+      {required this.material,
+      this.phl4,
+      this.phl5,
+      this.phl6,
+      this.brandTopNode});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['Material'] = Variable<String>(material);
+    if (!nullToAbsent || phl4 != null) {
+      map['PHL4'] = Variable<String>(phl4);
+    }
+    if (!nullToAbsent || phl5 != null) {
+      map['PHL5'] = Variable<String>(phl5);
+    }
+    if (!nullToAbsent || phl6 != null) {
+      map['PHL6'] = Variable<String>(phl6);
+    }
+    if (!nullToAbsent || brandTopNode != null) {
+      map['BrandTopNode'] = Variable<String>(brandTopNode);
+    }
+    return map;
+  }
+
+  ProdutoCategoriasCompanion toCompanion(bool nullToAbsent) {
+    return ProdutoCategoriasCompanion(
+      material: Value(material),
+      phl4: phl4 == null && nullToAbsent ? const Value.absent() : Value(phl4),
+      phl5: phl5 == null && nullToAbsent ? const Value.absent() : Value(phl5),
+      phl6: phl6 == null && nullToAbsent ? const Value.absent() : Value(phl6),
+      brandTopNode: brandTopNode == null && nullToAbsent
+          ? const Value.absent()
+          : Value(brandTopNode),
+    );
+  }
+
+  factory ProdutoCategoria.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return ProdutoCategoria(
+      material: serializer.fromJson<String>(json['material']),
+      phl4: serializer.fromJson<String?>(json['phl4']),
+      phl5: serializer.fromJson<String?>(json['phl5']),
+      phl6: serializer.fromJson<String?>(json['phl6']),
+      brandTopNode: serializer.fromJson<String?>(json['brandTopNode']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'material': serializer.toJson<String>(material),
+      'phl4': serializer.toJson<String?>(phl4),
+      'phl5': serializer.toJson<String?>(phl5),
+      'phl6': serializer.toJson<String?>(phl6),
+      'brandTopNode': serializer.toJson<String?>(brandTopNode),
+    };
+  }
+
+  ProdutoCategoria copyWith(
+          {String? material,
+          Value<String?> phl4 = const Value.absent(),
+          Value<String?> phl5 = const Value.absent(),
+          Value<String?> phl6 = const Value.absent(),
+          Value<String?> brandTopNode = const Value.absent()}) =>
+      ProdutoCategoria(
+        material: material ?? this.material,
+        phl4: phl4.present ? phl4.value : this.phl4,
+        phl5: phl5.present ? phl5.value : this.phl5,
+        phl6: phl6.present ? phl6.value : this.phl6,
+        brandTopNode:
+            brandTopNode.present ? brandTopNode.value : this.brandTopNode,
+      );
+  ProdutoCategoria copyWithCompanion(ProdutoCategoriasCompanion data) {
+    return ProdutoCategoria(
+      material: data.material.present ? data.material.value : this.material,
+      phl4: data.phl4.present ? data.phl4.value : this.phl4,
+      phl5: data.phl5.present ? data.phl5.value : this.phl5,
+      phl6: data.phl6.present ? data.phl6.value : this.phl6,
+      brandTopNode: data.brandTopNode.present
+          ? data.brandTopNode.value
+          : this.brandTopNode,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ProdutoCategoria(')
+          ..write('material: $material, ')
+          ..write('phl4: $phl4, ')
+          ..write('phl5: $phl5, ')
+          ..write('phl6: $phl6, ')
+          ..write('brandTopNode: $brandTopNode')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(material, phl4, phl5, phl6, brandTopNode);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is ProdutoCategoria &&
+          other.material == this.material &&
+          other.phl4 == this.phl4 &&
+          other.phl5 == this.phl5 &&
+          other.phl6 == this.phl6 &&
+          other.brandTopNode == this.brandTopNode);
+}
+
+class ProdutoCategoriasCompanion extends UpdateCompanion<ProdutoCategoria> {
+  final Value<String> material;
+  final Value<String?> phl4;
+  final Value<String?> phl5;
+  final Value<String?> phl6;
+  final Value<String?> brandTopNode;
+  final Value<int> rowid;
+  const ProdutoCategoriasCompanion({
+    this.material = const Value.absent(),
+    this.phl4 = const Value.absent(),
+    this.phl5 = const Value.absent(),
+    this.phl6 = const Value.absent(),
+    this.brandTopNode = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  ProdutoCategoriasCompanion.insert({
+    required String material,
+    this.phl4 = const Value.absent(),
+    this.phl5 = const Value.absent(),
+    this.phl6 = const Value.absent(),
+    this.brandTopNode = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : material = Value(material);
+  static Insertable<ProdutoCategoria> custom({
+    Expression<String>? material,
+    Expression<String>? phl4,
+    Expression<String>? phl5,
+    Expression<String>? phl6,
+    Expression<String>? brandTopNode,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (material != null) 'Material': material,
+      if (phl4 != null) 'PHL4': phl4,
+      if (phl5 != null) 'PHL5': phl5,
+      if (phl6 != null) 'PHL6': phl6,
+      if (brandTopNode != null) 'BrandTopNode': brandTopNode,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  ProdutoCategoriasCompanion copyWith(
+      {Value<String>? material,
+      Value<String?>? phl4,
+      Value<String?>? phl5,
+      Value<String?>? phl6,
+      Value<String?>? brandTopNode,
+      Value<int>? rowid}) {
+    return ProdutoCategoriasCompanion(
+      material: material ?? this.material,
+      phl4: phl4 ?? this.phl4,
+      phl5: phl5 ?? this.phl5,
+      phl6: phl6 ?? this.phl6,
+      brandTopNode: brandTopNode ?? this.brandTopNode,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (material.present) {
+      map['Material'] = Variable<String>(material.value);
+    }
+    if (phl4.present) {
+      map['PHL4'] = Variable<String>(phl4.value);
+    }
+    if (phl5.present) {
+      map['PHL5'] = Variable<String>(phl5.value);
+    }
+    if (phl6.present) {
+      map['PHL6'] = Variable<String>(phl6.value);
+    }
+    if (brandTopNode.present) {
+      map['BrandTopNode'] = Variable<String>(brandTopNode.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ProdutoCategoriasCompanion(')
+          ..write('material: $material, ')
+          ..write('phl4: $phl4, ')
+          ..write('phl5: $phl5, ')
+          ..write('phl6: $phl6, ')
+          ..write('brandTopNode: $brandTopNode, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -2077,6 +2389,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $PreCadastrosTable preCadastros = $PreCadastrosTable(this);
   late final $EnderecosAlternativosTable enderecosAlternativos =
       $EnderecosAlternativosTable(this);
+  late final $ProdutoCategoriasTable produtoCategorias =
+      $ProdutoCategoriasTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -2087,7 +2401,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         pedidosPendentes,
         pedidosEnviados,
         preCadastros,
-        enderecosAlternativos
+        enderecosAlternativos,
+        produtoCategorias
       ];
 }
 
@@ -3172,6 +3487,182 @@ typedef $$EnderecosAlternativosTableProcessedTableManager
         ),
         EnderecoAlternativo,
         PrefetchHooks Function()>;
+typedef $$ProdutoCategoriasTableCreateCompanionBuilder
+    = ProdutoCategoriasCompanion Function({
+  required String material,
+  Value<String?> phl4,
+  Value<String?> phl5,
+  Value<String?> phl6,
+  Value<String?> brandTopNode,
+  Value<int> rowid,
+});
+typedef $$ProdutoCategoriasTableUpdateCompanionBuilder
+    = ProdutoCategoriasCompanion Function({
+  Value<String> material,
+  Value<String?> phl4,
+  Value<String?> phl5,
+  Value<String?> phl6,
+  Value<String?> brandTopNode,
+  Value<int> rowid,
+});
+
+class $$ProdutoCategoriasTableFilterComposer
+    extends Composer<_$AppDatabase, $ProdutoCategoriasTable> {
+  $$ProdutoCategoriasTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get material => $composableBuilder(
+      column: $table.material, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get phl4 => $composableBuilder(
+      column: $table.phl4, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get phl5 => $composableBuilder(
+      column: $table.phl5, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get phl6 => $composableBuilder(
+      column: $table.phl6, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get brandTopNode => $composableBuilder(
+      column: $table.brandTopNode, builder: (column) => ColumnFilters(column));
+}
+
+class $$ProdutoCategoriasTableOrderingComposer
+    extends Composer<_$AppDatabase, $ProdutoCategoriasTable> {
+  $$ProdutoCategoriasTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get material => $composableBuilder(
+      column: $table.material, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get phl4 => $composableBuilder(
+      column: $table.phl4, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get phl5 => $composableBuilder(
+      column: $table.phl5, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get phl6 => $composableBuilder(
+      column: $table.phl6, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get brandTopNode => $composableBuilder(
+      column: $table.brandTopNode,
+      builder: (column) => ColumnOrderings(column));
+}
+
+class $$ProdutoCategoriasTableAnnotationComposer
+    extends Composer<_$AppDatabase, $ProdutoCategoriasTable> {
+  $$ProdutoCategoriasTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get material =>
+      $composableBuilder(column: $table.material, builder: (column) => column);
+
+  GeneratedColumn<String> get phl4 =>
+      $composableBuilder(column: $table.phl4, builder: (column) => column);
+
+  GeneratedColumn<String> get phl5 =>
+      $composableBuilder(column: $table.phl5, builder: (column) => column);
+
+  GeneratedColumn<String> get phl6 =>
+      $composableBuilder(column: $table.phl6, builder: (column) => column);
+
+  GeneratedColumn<String> get brandTopNode => $composableBuilder(
+      column: $table.brandTopNode, builder: (column) => column);
+}
+
+class $$ProdutoCategoriasTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $ProdutoCategoriasTable,
+    ProdutoCategoria,
+    $$ProdutoCategoriasTableFilterComposer,
+    $$ProdutoCategoriasTableOrderingComposer,
+    $$ProdutoCategoriasTableAnnotationComposer,
+    $$ProdutoCategoriasTableCreateCompanionBuilder,
+    $$ProdutoCategoriasTableUpdateCompanionBuilder,
+    (
+      ProdutoCategoria,
+      BaseReferences<_$AppDatabase, $ProdutoCategoriasTable, ProdutoCategoria>
+    ),
+    ProdutoCategoria,
+    PrefetchHooks Function()> {
+  $$ProdutoCategoriasTableTableManager(
+      _$AppDatabase db, $ProdutoCategoriasTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$ProdutoCategoriasTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$ProdutoCategoriasTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$ProdutoCategoriasTableAnnotationComposer(
+                  $db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<String> material = const Value.absent(),
+            Value<String?> phl4 = const Value.absent(),
+            Value<String?> phl5 = const Value.absent(),
+            Value<String?> phl6 = const Value.absent(),
+            Value<String?> brandTopNode = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              ProdutoCategoriasCompanion(
+            material: material,
+            phl4: phl4,
+            phl5: phl5,
+            phl6: phl6,
+            brandTopNode: brandTopNode,
+            rowid: rowid,
+          ),
+          createCompanionCallback: ({
+            required String material,
+            Value<String?> phl4 = const Value.absent(),
+            Value<String?> phl5 = const Value.absent(),
+            Value<String?> phl6 = const Value.absent(),
+            Value<String?> brandTopNode = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) =>
+              ProdutoCategoriasCompanion.insert(
+            material: material,
+            phl4: phl4,
+            phl5: phl5,
+            phl6: phl6,
+            brandTopNode: brandTopNode,
+            rowid: rowid,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$ProdutoCategoriasTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $ProdutoCategoriasTable,
+    ProdutoCategoria,
+    $$ProdutoCategoriasTableFilterComposer,
+    $$ProdutoCategoriasTableOrderingComposer,
+    $$ProdutoCategoriasTableAnnotationComposer,
+    $$ProdutoCategoriasTableCreateCompanionBuilder,
+    $$ProdutoCategoriasTableUpdateCompanionBuilder,
+    (
+      ProdutoCategoria,
+      BaseReferences<_$AppDatabase, $ProdutoCategoriasTable, ProdutoCategoria>
+    ),
+    ProdutoCategoria,
+    PrefetchHooks Function()>;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -3188,4 +3679,6 @@ class $AppDatabaseManager {
       $$PreCadastrosTableTableManager(_db, _db.preCadastros);
   $$EnderecosAlternativosTableTableManager get enderecosAlternativos =>
       $$EnderecosAlternativosTableTableManager(_db, _db.enderecosAlternativos);
+  $$ProdutoCategoriasTableTableManager get produtoCategorias =>
+      $$ProdutoCategoriasTableTableManager(_db, _db.produtoCategorias);
 }
