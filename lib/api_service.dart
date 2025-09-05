@@ -47,13 +47,26 @@ class ApiService {
 
   static Future<void> enviarDadosAnalise(Map<String, dynamic> data) async {
     try {
-      await http.post(
+      debugPrint('=== ENVIANDO DADOS PARA ANALYTICS ===');
+      debugPrint('URL: $_postAnalyticsUrl');
+      debugPrint('Dados: ${jsonEncode(data)}');
+      
+      final response = await http.post(
         Uri.parse(_postAnalyticsUrl),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(data),
       ).timeout(const Duration(seconds: 20));
+      
+      debugPrint('Response Status: ${response.statusCode}');
+      debugPrint('Response Body: ${response.body}');
+      
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        debugPrint('✅ Dados de analytics enviados com sucesso!');
+      } else {
+        debugPrint('❌ Erro ao enviar dados de analytics: ${response.statusCode}');
+      }
     } catch (e) {
-      debugPrint('Erro ao enviar dados de análise: $e');
+      debugPrint('❌ Erro de conexão ao enviar dados de análise: $e');
     }
   }
   

@@ -41,6 +41,51 @@ class _TelaLoginState extends State<TelaLogin> with TickerProviderStateMixin {
       );
     }
   }
+
+  void _mostrarAjudaSenha() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.help_outline, color: Colors.blue),
+            const SizedBox(width: 8),
+            const Text('Como recuperar minha senha?'),
+          ],
+        ),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'A senha é formada pela palavra "admin" seguida da soma dos dígitos do seu U-number.',
+              style: TextStyle(fontSize: 16),
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Exemplo:',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            SizedBox(height: 8),
+            Text('• U-number: u12345'),
+            Text('• Soma dos dígitos: 1+2+3+4+5 = 15'),
+            Text('• Senha: admin15'),
+            SizedBox(height: 16),
+            Text(
+              'Para seu U-number, calcule a soma dos dígitos e use "admin" + esse resultado.',
+              style: TextStyle(fontSize: 14, fontStyle: FontStyle.italic),
+            ),
+          ],
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Entendi'),
+          ),
+        ],
+      ),
+    );
+  }
   
   @override
   void initState() {
@@ -101,7 +146,18 @@ class _TelaLoginState extends State<TelaLogin> with TickerProviderStateMixin {
                           style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
                           child: const Text('Entrar'),
                         ),
-                      )
+                      ),
+                      const SizedBox(height: 16),
+                      TextButton(
+                        onPressed: _mostrarAjudaSenha,
+                        child: const Text(
+                          'Esqueci minha senha',
+                          style: TextStyle(
+                            color: Colors.blue,
+                            decoration: TextDecoration.underline,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),

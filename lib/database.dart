@@ -1,7 +1,5 @@
 import 'dart:convert';
 import 'package:drift/drift.dart';
-import 'package:flutter/foundation.dart';
-import 'models/promocao.dart';
 
 // Importa o conector de forma condicional.
 import 'connection/native.dart' if (dart.library.html) 'connection/web.dart';
@@ -100,7 +98,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(openConnection());
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7; // Incrementando para forçar migração
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -121,13 +119,40 @@ class AppDatabase extends _$AppDatabase {
         await m.createTable(enderecosAlternativos);
       }
       if (from < 5) {
-        await m.addColumn(pedidosEnviados, pedidosEnviados.appPedidoId);
-        await m.addColumn(pedidosEnviados, pedidosEnviados.numeroPedidoSap);
-        await m.addColumn(pedidosEnviados, pedidosEnviados.status);
-        await m.addColumn(pedidosEnviados, pedidosEnviados.obsCentral);
+        // CORREÇÃO: Verificar se a tabela existe antes de adicionar colunas
+        try {
+          await m.addColumn(pedidosEnviados, pedidosEnviados.appPedidoId);
+          await m.addColumn(pedidosEnviados, pedidosEnviados.numeroPedidoSap);
+          await m.addColumn(pedidosEnviados, pedidosEnviados.status);
+          await m.addColumn(pedidosEnviados, pedidosEnviados.obsCentral);
+        } catch (e) {
+          // Se a tabela não existe, criar ela
+          print('Erro ao adicionar colunas, criando tabela pedidos_enviados: $e');
+          await m.createTable(pedidosEnviados);
+        }
       }
       if (from < 6) {
         await m.createTable(produtoCategorias);
+      }
+      if (from < 7) {
+        // CORREÇÃO VERSÃO 7: Recriar tabelas problemáticas para garantir consistência
+        print('Migração v7: Recriando tabelas para garantir consistência...');
+        try {
+          // Recriar tabela de pedidos enviados se houver problemas
+          await m.deleteTable('pedidos_enviados');
+          await m.createTable(pedidosEnviados);
+          
+          // Recriar tabela de pedidos pendentes se houver problemas
+          await m.deleteTable('pedidos_pendentes');
+          await m.createTable(pedidosPendentes);
+          
+          print('Migração v7: Tabelas recriadas com sucesso');
+        } catch (e) {
+          print('Erro na migração v7: $e');
+          // Em caso de erro, criar as tabelas se não existirem
+          await m.createTable(pedidosEnviados);
+          await m.createTable(pedidosPendentes);
+        }
       }
     }
   );
@@ -316,10 +341,30 @@ class AppDatabase extends _$AppDatabase {
     for (var pedido in pedidos) {
       final data = jsonDecode(pedido.pedidoJson);
       if (data['itens'] is String) {
-        final List<dynamic> itens = jsonDecode(data['itens']);
-        for (var item in itens) {
-          final descricao = item['descricao'] as String? ?? 'N/A';
-          contagem[descricao] = (contagem[descricao] ?? 0) + (item['qtd'] as int? ?? 0);
+        try {
+          // Tenta fazer parse como JSON primeiro (pedidos antigos)
+          final List<dynamic> itens = jsonDecode(data['itens']);
+          for (var item in itens) {
+            final descricao = item['descricao'] as String? ?? 'N/A';
+            contagem[descricao] = (contagem[descricao] ?? 0) + (item['qtd'] as int? ?? 0);
+          }
+        } catch (e) {
+          // Se falhar, é o novo formato string - processa o texto
+          final String itensTexto = data['itens'];
+          final linhas = itensTexto.split('\n').where((linha) => linha.trim().isNotEmpty).toList();
+          
+          for (final linha in linhas) {
+            // Pula linhas de cabeçalho e desconto
+            if (linha.contains('Desconto aplicado') || linha.contains('=')) continue;
+            
+            final partes = linha.trim().split(' ');
+            if (partes.length >= 2) {
+              final codigo = partes[0];
+              final quantidade = int.tryParse(partes[1]) ?? 1;
+              final descricao = 'Produto $codigo'; // Descrição básica
+              contagem[descricao] = (contagem[descricao] ?? 0) + quantidade;
+            }
+          }
         }
       }
     }
@@ -357,6 +402,29 @@ class AppDatabase extends _$AppDatabase {
         contagemDias[diaFormatado] = (contagemDias[diaFormatado] ?? 0) + 1;
     }
     return contagemDias;
+  }
+
+  // Método para reset completo do banco em caso de problemas graves
+  Future<void> resetDatabase() async {
+    print('🗑️ Database: Fazendo reset completo do banco de dados...');
+    try {
+      await customStatement('DROP TABLE IF EXISTS clientes');
+      await customStatement('DROP TABLE IF EXISTS produtos');
+      await customStatement('DROP TABLE IF EXISTS pedidos_pendentes');
+      await customStatement('DROP TABLE IF EXISTS pedidos_enviados');
+      await customStatement('DROP TABLE IF EXISTS pre_cadastros');
+      await customStatement('DROP TABLE IF EXISTS enderecos_alternativos');
+      await customStatement('DROP TABLE IF EXISTS produto_categorias');
+      
+      // Recriar todas as tabelas
+      final m = Migrator(this);
+      await m.createAll();
+      
+      print('✅ Database: Reset completo concluído com sucesso');
+    } catch (e) {
+      print('❌ Database: Erro durante reset: $e');
+      rethrow;
+    }
   }
 }
 

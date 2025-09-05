@@ -67,7 +67,19 @@ class AppDataNotifier with ChangeNotifier {
   
   void cancelSync() {
     _cancelSync = true;
-    _syncMessage = 'Sincronização cancelada...';
+    _isSyncing = false; // CORREÇÃO: Resetar o estado de sincronização
+    _syncProgress = 0.0; // CORREÇÃO: Resetar o progresso
+    _syncMessage = 'Sincronização cancelada.';
+    notifyListeners();
+  }
+
+  // Método para forçar reset do estado de sincronização em caso de problemas
+  void forceResetSyncState() {
+    print('🔄 AppDataNotifier: Forçando reset do estado de sincronização');
+    _isSyncing = false;
+    _cancelSync = false;
+    _syncProgress = 0.0;
+    _syncMessage = 'Pronto para sincronizar';
     notifyListeners();
   }
 
@@ -127,12 +139,14 @@ class AppDataNotifier with ChangeNotifier {
   
   // --- LÓGICA DE SINCRONIZAÇÃO DE PRODUTOS ---
   Future<bool> syncProdutosFromAPI() async {
+     print('🚀 AppDataNotifier: Iniciando sincronização de produtos...');
      _isSyncing = true;
     _cancelSync = false;
     _syncProgress = 0.0;
     _syncMessage = 'A iniciar sincronização de produtos...';
     notifyListeners();
 
+    print('🗑️ AppDataNotifier: Apagando produtos existentes...');
     await database.apagarTodosProdutos();
     
     int totalRecebido = 0;
@@ -140,39 +154,49 @@ class AppDataNotifier with ChangeNotifier {
     
     while (true) {
       if (_cancelSync) {
+        print('❌ AppDataNotifier: Sincronização de produtos cancelada pelo usuário');
         sucesso = false;
         break;
       }
 
       _syncMessage = 'A buscar produtos... ($totalRecebido / ~$_totalProdutosAprox)';
+      print('📡 AppDataNotifier: Buscando produtos batch - skip: $totalRecebido');
       notifyListeners();
 
       final batch = await ApiService.getBaseData('produtos', skip: totalRecebido);
 
       if (batch == null) {
+        print('❌ AppDataNotifier: Erro ao buscar batch de produtos - API retornou null');
         sucesso = false;
         break;
       }
 
+      print('✅ AppDataNotifier: Recebido batch com ${batch.length} produtos');
       await database.populateProdutosFromAPI(batch);
 
       totalRecebido += batch.length;
        _syncProgress = (totalRecebido / _totalProdutosAprox).clamp(0.0, 1.0);
       notifyListeners();
 
-      if (batch.length < 2000) break;
+      if (batch.length < 2000) {
+        print('🏁 AppDataNotifier: Última página de produtos recebida (${batch.length} < 2000)');
+        break;
+      }
     }
 
     if (sucesso) {
+      print('✅ AppDataNotifier: Sincronização de produtos concluída com sucesso!');
       final now = DateTime.now();
       _lastProductSync = now;
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt('lastProductSync', now.millisecondsSinceEpoch);
       _syncMessage = 'Sincronização de produtos concluída!';
     } else {
+       print('❌ AppDataNotifier: Sincronização de produtos falhou ou foi cancelada');
        _syncMessage = _cancelSync ? 'Sincronização de produtos cancelada.' : 'Erro ao sincronizar produtos.';
     }
 
+    print('🏁 AppDataNotifier: Finalizando sincronização de produtos (isSyncing = false)');
     _isSyncing = false;
     _cancelSync = false;
     notifyListeners();

@@ -66,7 +66,7 @@ class MyApp extends StatelessWidget {
             );
 
         return MaterialApp(
-          title: 'Conecta Vendas',
+          title: 'Order to Smile',
           debugShowCheckedModeBanner: false,
           theme: baseTheme.copyWith(
             textTheme: customTextTheme,

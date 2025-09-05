@@ -137,10 +137,47 @@ class _TelaHistoricoState extends State<TelaHistorico> {
                       itemBuilder: (context, index) {
                         final pedido = pedidos[index];
                         final pedidoData = jsonDecode(pedido.pedidoJson);
-                        final List<dynamic> itensJson = (pedidoData['itens'] is String)
-                            ? jsonDecode(pedidoData['itens'])
-                            : pedidoData['itens'];
-                        final List<ItemPedido> itens = itensJson.map((item) => ItemPedido.fromJson(item)).toList();
+                        
+                        // Tratamento para diferentes formatos de itens (antigo JSON vs novo formato string)
+                        List<ItemPedido> itens = [];
+                        try {
+                          if (pedidoData['itens'] is String) {
+                            // Tenta fazer parse como JSON primeiro (pedidos antigos)
+                            try {
+                              final List<dynamic> itensJson = jsonDecode(pedidoData['itens']);
+                              itens = itensJson.map((item) => ItemPedido.fromJson(item)).toList();
+                            } catch (e) {
+                              // Se falhar, é o novo formato string - cria itens básicos a partir do texto
+                              final String itensTexto = pedidoData['itens'];
+                              final linhas = itensTexto.split('\n').where((linha) => linha.trim().isNotEmpty).toList();
+                              
+                              for (final linha in linhas) {
+                                // Pula linhas de cabeçalho e desconto
+                                if (linha.contains('Desconto aplicado') || linha.contains('=')) continue;
+                                
+                                final partes = linha.trim().split(' ');
+                                if (partes.length >= 2) {
+                                  final codigo = partes[0];
+                                  final quantidade = int.tryParse(partes[1]) ?? 1;
+                                  itens.add(ItemPedido(
+                                    cod: codigo,
+                                    descricao: 'Produto $codigo', // Descrição básica
+                                    qtd: quantidade,
+                                    valorUnitario: 0.0, // Não temos o valor no novo formato
+                                  ));
+                                }
+                              }
+                            }
+                          } else {
+                            // Formato de lista direta
+                            final List<dynamic> itensJson = pedidoData['itens'];
+                            itens = itensJson.map((item) => ItemPedido.fromJson(item)).toList();
+                          }
+                        } catch (e) {
+                          // Se tudo falhar, cria uma lista vazia
+                          itens = [];
+                          debugPrint('Erro ao processar itens do pedido: $e');
+                        }
 
                         return Card(
                           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

@@ -4,6 +4,7 @@ import '../../database.dart';
 import '../../providers/app_data_notifier.dart';
 import '../../providers/auth_notifier.dart';
 import '../../providers/theme_notifier.dart';
+import '../../services/config_service.dart';
 import '../pedido/tela_de_pedido.dart';
 import '../pre_cadastro/tela_pre_cadastro_cliente.dart';
 import '../visualizacoes/tela_visualizacoes.dart';
@@ -32,9 +33,14 @@ class _MainLayoutState extends State<MainLayout> {
       TelaDePedido(database: widget.database),
       TelaPreCadastroCliente(database: widget.database),
       TelaVisualizacoes(database: widget.database),
-      const TelaConfiguracoes(),
+      TelaConfiguracoes(database: widget.database),
       const TelaAjuda(),
     ];
+    
+    // Verifica configuração remota ao entrar no app (após login)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ConfigService.checkRemoteConfig(context);
+    });
   }
 
   void _logoff(BuildContext context) {
@@ -95,7 +101,7 @@ class _MainLayoutState extends State<MainLayout> {
                         destinations: [
                           const NavigationRailDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: Text('Página Inicial')),
                           const NavigationRailDestination(icon: Icon(Icons.add_shopping_cart_outlined), selectedIcon: Icon(Icons.add_shopping_cart), label: Text('Criar Pedido')),
-                          const NavigationRailDestination(icon: Icon(Icons.person_add_alt_1_outlined), selectedIcon: Icon(Icons.person_add_alt_1), label: Text('Pré-Cadastro')),
+                          const NavigationRailDestination(icon: Icon(Icons.person_add_alt_1_outlined), selectedIcon: Icon(Icons.person_add_alt_1), label: Text('Formulário de Contato')),
                           NavigationRailDestination(
                             icon: Badge(
                               label: Text(appData.pendingOrderCount.toString()),

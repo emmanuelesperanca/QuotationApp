@@ -80,7 +80,7 @@ class _TelaPreCadastroClienteState extends State<TelaPreCadastroCliente> {
 
       await widget.database.inserePreCadastro(novoPreCadastro);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Pré-Cadastro salvo com sucesso!')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Contato salvo com sucesso!')));
       
       _formKey.currentState?.reset();
       _nomeController.clear();
@@ -101,7 +101,7 @@ class _TelaPreCadastroClienteState extends State<TelaPreCadastroCliente> {
     return Scaffold(
       backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: const Text('Pré-Cadastrar Cliente'),
+        title: const Text('Formulário de Contato ao Cliente'),
         backgroundColor: Colors.black.withOpacity(0.5),
       ),
       body: SingleChildScrollView(
@@ -138,7 +138,7 @@ class _TelaPreCadastroClienteState extends State<TelaPreCadastroCliente> {
               TextFormField(controller: _croController, decoration: const InputDecoration(labelText: 'CRO', border: OutlineInputBorder())),
               const SizedBox(height: 16),
               CheckboxListTile(
-                title: const Text('Declaro que informei ao cliente que os dados serão utilizados apenas para contato posterior.'),
+                title: const Text('Declaro que informei e obtive o consentimento do titular dos dados para a coleta e utilização das informações pela JJGC Indústria e Comércio de Materiais Dentários S.A. (“JJGC”), com a finalidade de entrar em contato e realizar ofertas comerciais dos produtos que envolvam as marcas comercializadas no Brasil pela JJGC.'),
                 value: _consentimento,
                 onChanged: (value) => setState(() => _consentimento = value!),
                 controlAffinity: ListTileControlAffinity.leading,
@@ -153,7 +153,7 @@ class _TelaPreCadastroClienteState extends State<TelaPreCadastroCliente> {
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     backgroundColor: podeSalvar ? null : Colors.grey,
                   ),
-                  child: const Text('Salvar Pré-Cadastro'),
+                  child: const Text('Salvar contato'),
                 ),
               ),
             ],

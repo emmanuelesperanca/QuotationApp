@@ -54,6 +54,34 @@ class _TelaPedidosPendentesState extends State<TelaPedidosPendentes> {
         await widget.database.inserePedidoEnviado(pedido.pedidoJson, appPedidoId);
         await widget.database.deletaPedidoPendente(pedido.id);
 
+        // Enviar dados de analytics para o reenvio bem-sucedido
+        final String? deviceUUID = await ApiService.getDeviceUUID();
+        final String version = await ApiService.getAppVersion();
+        
+        final Map<String, dynamic> transacaoData = {
+          'transacao': {
+            'appPedidoUUID': appPedidoId,
+            'timestampPedido': DateTime.now().toIso8601String(),
+            'vendedor': {'codigoAssessor': pedidoData['cod_assessor'] ?? ''},
+            'dispositivo': {'deviceUUID': deviceUUID},
+            'cliente': {'numeroClienteSAP': pedidoData['cod_cliente'] ?? '', 'nome': pedidoData['cliente'] ?? ''},
+            'pedido': {
+              'valorTotal': (pedidoData['total'] as num?)?.toDouble() ?? 0.0,
+              'condicaoPagamento': pedidoData['condicao_pagamento'] ?? '',
+              'parcelas': _extrairNumeroParcelas(pedidoData['parcelas']),
+              'metodoEntrega': pedidoData['entrega'] ?? '',
+              'promocode': pedidoData['promocode'] ?? '',
+            },
+            'itens': _extrairItensParaAnalytics(pedidoData['itens']),
+          },
+          'evento': {
+            'tipo': 'PEDIDO_ENVIADO',
+            'versaoApp': version,
+          },
+        };
+
+        await ApiService.enviarDadosAnalise(transacaoData);
+
         scaffoldMessenger.showSnackBar(
           const SnackBar(content: Text('Pedido reenviado e movido para o histórico com sucesso!'), backgroundColor: Colors.green),
         );
@@ -75,6 +103,86 @@ class _TelaPedidosPendentesState extends State<TelaPedidosPendentes> {
       }
       _refreshData();
     }
+  }
+
+  List<Map<String, dynamic>> _extrairItensParaAnalytics(dynamic itensData) {
+    List<Map<String, dynamic>> itensAnalytics = [];
+    
+    try {
+      if (itensData is String) {
+        // Tenta fazer parse como JSON primeiro (pedidos antigos)
+        try {
+          final List<dynamic> itensJson = jsonDecode(itensData);
+          itensAnalytics = itensJson.map((item) {
+            final itemMap = item as Map<String, dynamic>;
+            return {
+              'referencia': itemMap['cod'] ?? '',
+              'quantidade': itemMap['qtd'] ?? 0,
+              'valorUnitario': (itemMap['valorUnitario'] as num?)?.toDouble() ?? 0.0,
+              'descontoPercentual': (itemMap['desconto'] as num?)?.toDouble() ?? 0.0,
+            };
+          }).toList();
+        } catch (e) {
+          // Se falhar, é o novo formato string - cria itens básicos a partir do texto
+          final String itensTexto = itensData;
+          final linhas = itensTexto.split('\n').where((linha) => linha.trim().isNotEmpty).toList();
+          
+          for (final linha in linhas) {
+            // Pula linhas de cabeçalho e desconto
+            if (linha.contains('Desconto aplicado') || linha.contains('=')) continue;
+            
+            final partes = linha.trim().split(' ');
+            if (partes.length >= 2) {
+              final codigo = partes[0];
+              final quantidade = int.tryParse(partes[1]) ?? 1;
+              itensAnalytics.add({
+                'referencia': codigo,
+                'quantidade': quantidade,
+                'valorUnitario': 0.0,
+                'descontoPercentual': 0.0,
+              });
+            }
+          }
+        }
+      } else {
+        // Formato de lista direta
+        final List<dynamic> itensJson = itensData;
+        itensAnalytics = itensJson.map((item) {
+          final itemMap = item as Map<String, dynamic>;
+          return {
+            'referencia': itemMap['cod'] ?? '',
+            'quantidade': itemMap['qtd'] ?? 0,
+            'valorUnitario': (itemMap['valorUnitario'] as num?)?.toDouble() ?? 0.0,
+            'descontoPercentual': (itemMap['desconto'] as num?)?.toDouble() ?? 0.0,
+          };
+        }).toList();
+      }
+    } catch (e) {
+      debugPrint('Erro ao extrair itens para analytics: $e');
+      // Se tudo falhar, retorna lista vazia
+      itensAnalytics = [];
+    }
+    
+    return itensAnalytics;
+  }
+
+  int _extrairNumeroParcelas(dynamic parcelasData) {
+    if (parcelasData == null) return 1;
+    
+    if (parcelasData is int) {
+      return parcelasData;
+    }
+    
+    if (parcelasData is String) {
+      // Extrai o número da string "X x" ou "X"
+      final String parcelasString = parcelasData.trim();
+      final match = RegExp(r'^(\d+)').firstMatch(parcelasString);
+      if (match != null) {
+        return int.tryParse(match.group(1)!) ?? 1;
+      }
+    }
+    
+    return 1;
   }
 
 
@@ -127,13 +235,46 @@ class _TelaPedidosPendentesState extends State<TelaPedidosPendentes> {
                   final pedido = pedidos[index];
                   final pedidoData = jsonDecode(pedido.pedidoJson);
                   
-                   final List<dynamic> itensJson = (pedidoData['itens'] is String)
-                      ? jsonDecode(pedidoData['itens'])
-                      : pedidoData['itens'];
-                  
-                  final List<ItemPedido> itens = itensJson.map((item) {
-                      return ItemPedido.fromJson(item as Map<String, dynamic>);
-                  }).toList();
+                  // Tratamento para diferentes formatos de itens (antigo JSON vs novo formato string)
+                  List<ItemPedido> itens = [];
+                  try {
+                    if (pedidoData['itens'] is String) {
+                      // Tenta fazer parse como JSON primeiro (pedidos antigos)
+                      try {
+                        final List<dynamic> itensJson = jsonDecode(pedidoData['itens']);
+                        itens = itensJson.map((item) => ItemPedido.fromJson(item as Map<String, dynamic>)).toList();
+                      } catch (e) {
+                        // Se falhar, é o novo formato string - cria itens básicos a partir do texto
+                        final String itensTexto = pedidoData['itens'];
+                        final linhas = itensTexto.split('\n').where((linha) => linha.trim().isNotEmpty).toList();
+                        
+                        for (final linha in linhas) {
+                          // Pula linhas de cabeçalho e desconto
+                          if (linha.contains('Desconto aplicado') || linha.contains('=')) continue;
+                          
+                          final partes = linha.trim().split(' ');
+                          if (partes.length >= 2) {
+                            final codigo = partes[0];
+                            final quantidade = int.tryParse(partes[1]) ?? 1;
+                            itens.add(ItemPedido(
+                              cod: codigo,
+                              descricao: 'Produto $codigo', // Descrição básica
+                              qtd: quantidade,
+                              valorUnitario: 0.0, // Não temos o valor no novo formato
+                            ));
+                          }
+                        }
+                      }
+                    } else {
+                      // Formato de lista direta
+                      final List<dynamic> itensJson = pedidoData['itens'];
+                      itens = itensJson.map((item) => ItemPedido.fromJson(item as Map<String, dynamic>)).toList();
+                    }
+                  } catch (e) {
+                    // Se tudo falhar, cria uma lista vazia
+                    itens = [];
+                    debugPrint('Erro ao processar itens do pedido pendente: $e');
+                  }
 
                   return Card(
                     margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

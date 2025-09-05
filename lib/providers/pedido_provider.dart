@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../database.dart';
 import '../models/item_pedido.dart';
 import '../models/promocao.dart';
@@ -154,8 +153,12 @@ class PedidoProvider with ChangeNotifier {
     _mostrarCampoOutroEndereco = (endereco == null);
     if (endereco != null) {
       _enderecoEntregaController.text = endereco.enderecoFormatado;
+      // Adiciona automaticamente nas observações quando um endereço é selecionado
+      adicionarEnderecoNasObservacoes(endereco.enderecoFormatado);
     } else {
       _enderecoEntregaController.clear();
+      // Remove das observações quando nenhum endereço está selecionado
+      removerEnderecoNasObservacoes();
     }
     notifyListeners();
   }
@@ -235,6 +238,52 @@ class PedidoProvider with ChangeNotifier {
   void atualizarDescontoItem(int index, double desconto) {
     _itensPedido[index].desconto = desconto;
     notifyListeners();
+  }
+  
+  void adicionarEnderecoNasObservacoes(String enderecoAlternativo) {
+    if (enderecoAlternativo.trim().isEmpty) return;
+    
+    final observacaoEndereco = "Endereço de entrega alternativo: $enderecoAlternativo";
+    final observacaoAtual = _obsController.text.trim();
+    
+    // Verifica se já existe uma observação de endereço alternativo para evitar duplicação
+    if (observacaoAtual.contains("Endereço de entrega alternativo:")) {
+      // Remove a observação antiga e adiciona a nova
+      final linhas = observacaoAtual.split('\n');
+      final linhasSemEndereco = linhas.where((linha) => !linha.contains("Endereço de entrega alternativo:")).toList();
+      
+      // Remove linhas vazias desnecessárias
+      linhasSemEndereco.removeWhere((linha) => linha.trim().isEmpty);
+      
+      if (linhasSemEndereco.isNotEmpty) {
+        linhasSemEndereco.add(observacaoEndereco);
+        _obsController.text = linhasSemEndereco.join('\n');
+      } else {
+        _obsController.text = observacaoEndereco;
+      }
+    } else {
+      // Adiciona a nova observação
+      if (observacaoAtual.isEmpty) {
+        _obsController.text = observacaoEndereco;
+      } else {
+        _obsController.text = "$observacaoAtual\n$observacaoEndereco";
+      }
+    }
+    notifyListeners();
+  }
+
+  void removerEnderecoNasObservacoes() {
+    final observacaoAtual = _obsController.text.trim();
+    if (observacaoAtual.contains("Endereço de entrega alternativo:")) {
+      final linhas = observacaoAtual.split('\n');
+      final linhasSemEndereco = linhas.where((linha) => !linha.contains("Endereço de entrega alternativo:")).toList();
+      
+      // Remove linhas vazias desnecessárias
+      linhasSemEndereco.removeWhere((linha) => linha.trim().isEmpty);
+      
+      _obsController.text = linhasSemEndereco.join('\n').trim();
+      notifyListeners();
+    }
   }
 
   void _recalcularStatusPromocao() {

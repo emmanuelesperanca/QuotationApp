@@ -8,6 +8,7 @@ import '../../models/item_pedido.dart';
 import '../../providers/app_data_notifier.dart';
 import '../../providers/auth_notifier.dart';
 import '../../providers/pedido_provider.dart';
+import '../../services/config_service.dart';
 import 'tela_lista_produtos.dart';
 import 'tela_selecao_promocao.dart';
 import '../../pdf_service.dart';
@@ -30,6 +31,29 @@ class _TelaDePedidoState extends State<TelaDePedido> {
     _pedidoProvider = Provider.of<PedidoProvider>(context, listen: false);
     final auth = Provider.of<AuthNotifier>(context, listen: false);
     _pedidoProvider.setCodigoAssessor(auth.username ?? '');
+    
+    // Adiciona listener para o campo de endereço alternativo
+    _pedidoProvider.enderecoEntregaController.addListener(_onEnderecoAlternativoChanged);
+    
+    // Verifica configuração remota ao acessar a tela de pedidos
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ConfigService.checkRemoteConfig(context);
+    });
+  }
+  
+  @override
+  void dispose() {
+    _pedidoProvider.enderecoEntregaController.removeListener(_onEnderecoAlternativoChanged);
+    super.dispose();
+  }
+  
+  void _onEnderecoAlternativoChanged() {
+    final endereco = _pedidoProvider.enderecoEntregaController.text.trim();
+    if (endereco.isNotEmpty) {
+      _pedidoProvider.adicionarEnderecoNasObservacoes(endereco);
+    } else {
+      _pedidoProvider.removerEnderecoNasObservacoes();
+    }
   }
 
   void _abrirListaProdutos() async {
@@ -120,6 +144,48 @@ class _TelaDePedidoState extends State<TelaDePedido> {
     }
   }
 
+  void _mostrarAvisoEdicaoCliente() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.info, color: Colors.blue),
+            const SizedBox(width: 8),
+            const Text('Aviso Importante'),
+          ],
+        ),
+        content: const Text('Esta alteração não será aplicada ao cadastro do cliente no SAP, apenas para este pedido específico.\n\nOs dados originais do cliente permanecerão inalterados no sistema.'),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Entendi'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatarItensParaAPI(List<ItemPedido> itens) {
+    final StringBuffer buffer = StringBuffer();
+    
+    // Primeira parte: código e quantidade
+    for (final item in itens) {
+      buffer.writeln('${item.cod} ${item.qtd}');
+    }
+    
+    // Adiciona uma linha vazia
+    buffer.writeln();
+    
+    // Segunda parte: descontos aplicados
+    buffer.writeln('Desconto aplicado');
+    for (final item in itens) {
+      buffer.writeln('${item.cod} = ${item.desconto.toStringAsFixed(1)}%');
+    }
+    
+    return buffer.toString().trim();
+  }
+
   Future<void> _enviarPedido() async {
     final pedidoProvider = context.read<PedidoProvider>();
     final appDataNotifier = context.read<AppDataNotifier>();
@@ -136,73 +202,95 @@ class _TelaDePedidoState extends State<TelaDePedido> {
 
     setState(() => _isSending = true);
 
-    final total = pedidoProvider.itensPedido.fold(0.0, (sum, item) => sum + item.valorFinal);
-    final appPedidoId = const Uuid().v4();
-    final String? deviceUUID = await ApiService.getDeviceUUID();
-    final String version = await ApiService.getAppVersion();
+    try {
+      final total = pedidoProvider.itensPedido.fold(0.0, (sum, item) => sum + item.valorFinal);
+      final appPedidoId = const Uuid().v4();
+      final String? deviceUUID = await ApiService.getDeviceUUID();
+      final String version = await ApiService.getAppVersion();
 
-    final Map<String, dynamic> pedidoData = {
-      "app_pedido_id": appPedidoId,
-      "cliente": pedidoProvider.clienteSelecionado!.nome,
-      "retira_estande": pedidoProvider.retiraEstande,
-      "endereço_padrão": pedidoProvider.usarEnderecoPrincipal,
-      "email": pedidoProvider.emailController.text,
-      "telefone": pedidoProvider.telefoneController.text,
-      "cod_cliente": pedidoProvider.clienteSelecionado!.numeroCliente,
-      "cod_assessor": pedidoProvider.codigoAssessorController.text,
-      "endereco_entrega": pedidoProvider.usarEnderecoPrincipal ? pedidoProvider.clienteSelecionado!.enderecoCompleto : pedidoProvider.enderecoEntregaController.text,
-      "entrega": pedidoProvider.metodoDeEntrega,
-      "condicao_pagamento": pedidoProvider.metodoPagamento,
-      "parcelas": (pedidoProvider.metodoPagamento == 'Boleto' || pedidoProvider.metodoPagamento == 'Cartão') ? '${pedidoProvider.parcelasCartao} x' : '1 x',
-      "promocode": pedidoProvider.promocodeController.text,
-      "total": total,
-      "itens": jsonEncode(pedidoProvider.itensPedido.map((item) => item.toJson()).toList()),
-      "obs": pedidoProvider.obsController.text,
-      "pre-cadastro": pedidoProvider.clienteSelecionado is PreCadastro ? pedidoProvider.clienteSelecionado.preCadastro : '',
-    };
-    
-    final pdfBytes = await PdfService.generateOrderPdfBytes(pedidoData);
-    pedidoData['pdf_base64'] = base64Encode(pdfBytes);
-    final jsonString = jsonEncode(pedidoData);
-    
-    final bool success = await ApiService.enviarPedido(pedidoData);
+      final Map<String, dynamic> pedidoData = {
+        "app_pedido_id": appPedidoId,
+        "cliente": pedidoProvider.clienteSelecionado!.nome,
+        "retira_estande": pedidoProvider.retiraEstande,
+        "endereço_padrão": pedidoProvider.usarEnderecoPrincipal,
+        "email": pedidoProvider.emailController.text,
+        "telefone": pedidoProvider.telefoneController.text,
+        "cod_cliente": pedidoProvider.clienteSelecionado!.numeroCliente,
+        "cod_assessor": pedidoProvider.codigoAssessorController.text,
+        "endereco_entrega": pedidoProvider.usarEnderecoPrincipal ? pedidoProvider.clienteSelecionado!.enderecoCompleto : pedidoProvider.enderecoEntregaController.text,
+        "entrega": pedidoProvider.metodoDeEntrega,
+        "condicao_pagamento": pedidoProvider.metodoPagamento,
+        "parcelas": (pedidoProvider.metodoPagamento == 'Boleto' || pedidoProvider.metodoPagamento == 'Cartão') ? '${pedidoProvider.parcelasCartao} x' : '1 x',
+        "promocode": pedidoProvider.promocodeController.text,
+        "total": total,
+        "itens": _formatarItensParaAPI(pedidoProvider.itensPedido),
+        "obs": pedidoProvider.obsController.text,
+        "pre-cadastro": pedidoProvider.clienteSelecionado is PreCadastro ? pedidoProvider.clienteSelecionado.preCadastro : '',
+      };
 
-    if (!mounted) return;
+      // Cria uma versão separada para o PDF com itens em formato JSON
+      final Map<String, dynamic> pedidoDataPdf = Map.from(pedidoData);
+      pedidoDataPdf['itens'] = jsonEncode(pedidoProvider.itensPedido.map((item) => item.toJson()).toList());
+      
+      final pdfBytes = await PdfService.generateOrderPdfBytes(pedidoDataPdf);
+      pedidoData['pdf_base64'] = base64Encode(pdfBytes);
+      final jsonString = jsonEncode(pedidoData);
+      
+      final bool success = await ApiService.enviarPedido(pedidoData);
 
-    if (success) {
-      await widget.database.inserePedidoEnviado(jsonString, appPedidoId);
-      scaffoldMessenger.showSnackBar(const SnackBar(content: Text('Pedido enviado com sucesso!'), backgroundColor: Colors.green));
-    } else {
-      await widget.database.inserePedidoPendente(jsonString);
-      appDataNotifier.updatePendingOrderCount();
-      scaffoldMessenger.showSnackBar(const SnackBar(content: Text('Falha ao enviar pedido. Salvo para envio posterior.'), backgroundColor: Colors.amber));
+      if (!mounted) return;
+
+      if (success) {
+        await widget.database.inserePedidoEnviado(jsonString, appPedidoId);
+        scaffoldMessenger.showSnackBar(const SnackBar(content: Text('Pedido enviado com sucesso!'), backgroundColor: Colors.green));
+      } else {
+        await widget.database.inserePedidoPendente(jsonString);
+        appDataNotifier.updatePendingOrderCount();
+        scaffoldMessenger.showSnackBar(const SnackBar(content: Text('Falha ao enviar pedido. Salvo para envio posterior.'), backgroundColor: Colors.amber));
+      }
+
+      final Map<String, dynamic> transacaoData = {
+          'transacao': {
+              'appPedidoUUID': appPedidoId,
+              'timestampPedido': DateTime.now().toIso8601String(),
+              'vendedor': {'codigoAssessor': pedidoProvider.codigoAssessorController.text},
+              'dispositivo': {'deviceUUID': deviceUUID},
+              'cliente': {'numeroClienteSAP': pedidoProvider.clienteSelecionado!.numeroCliente, 'nome': pedidoProvider.clienteSelecionado!.nome},
+              'pedido': {
+                  'valorTotal': total,
+                  'condicaoPagamento': pedidoProvider.metodoPagamento,
+                  'parcelas': pedidoProvider.parcelasCartao,
+                  'metodoEntrega': pedidoProvider.metodoDeEntrega,
+                  'promocode': pedidoProvider.promocodeController.text,
+              },
+              'itens': pedidoProvider.itensPedido.map((item) => {
+                'referencia': item.cod,
+                'quantidade': item.qtd,
+                'valorUnitario': item.valorUnitario,
+                'descontoPercentual': item.desconto,
+              }).toList(),
+          },
+          'evento': {
+              'tipo': success ? 'PEDIDO_ENVIADO' : 'PEDIDO_PENDENTE',
+              'versaoApp': version,
+          },
+      };
+
+      await ApiService.enviarDadosAnalise(transacaoData);
+      pedidoProvider.limparPedido();
+    } catch (e) {
+      if (!mounted) return;
+      scaffoldMessenger.showSnackBar(SnackBar(
+        content: Text('Erro ao processar pedido: $e'), 
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 5),
+      ));
+      print('Erro ao enviar pedido: $e'); // Para debug
+    } finally {
+      if (mounted) {
+        setState(() => _isSending = false);
+      }
     }
-
-    final Map<String, dynamic> transacaoData = {
-        'transacao': {
-            'appPedidoUUID': appPedidoId,
-            'timestampPedido': DateTime.now().toIso8601String(),
-            'vendedor': {'codigoAssessor': pedidoProvider.codigoAssessorController.text},
-            'dispositivo': {'deviceUUID': deviceUUID},
-            'cliente': {'numeroClienteSAP': pedidoProvider.clienteSelecionado.numeroCliente, 'nome': pedidoProvider.clienteSelecionado.nome},
-            'pedido': {
-                'valorTotal': total,
-                'condicaoPagamento': pedidoProvider.metodoPagamento,
-                'parcelas': pedidoProvider.parcelasCartao,
-                'metodoEntrega': pedidoProvider.metodoDeEntrega,
-                'promocode': pedidoProvider.promocodeController.text,
-            },
-            'itens': pedidoProvider.itensPedido.map((e) => e.toJson()).toList(),
-        },
-        'evento': {
-            'tipo': success ? 'PEDIDO_ENVIADO' : 'PEDIDO_PENDENTE',
-            'versaoApp': version,
-        },
-    };
-
-    await ApiService.enviarDadosAnalise(transacaoData);
-    pedidoProvider.limparPedido();
-    setState(() => _isSending = false);
   }
 
   @override
@@ -232,7 +320,7 @@ class _TelaDePedidoState extends State<TelaDePedido> {
               children: [
                 Text('Dados do Cliente', style: Theme.of(context).textTheme.headlineSmall),
                 CheckboxListTile(
-                  title: const Text('Cliente em Pré-Cadastro?'),
+                  title: const Text('Cliente em Formulário de Contato?'),
                   value: provider.buscarPreCadastro,
                   onChanged: (value) => provider.toggleBuscaPreCadastro(),
                   controlAffinity: ListTileControlAffinity.leading,
@@ -279,7 +367,16 @@ class _TelaDePedidoState extends State<TelaDePedido> {
                   Text('Cliente: ${provider.clienteSelecionado!.nome}'),
                   Row(
                     children: [
-                      Expanded(child: TextFormField(controller: provider.telefoneController, decoration: const InputDecoration(labelText: 'Telefone'))),
+                      Expanded(
+                        child: TextFormField(
+                          controller: provider.telefoneController,
+                          decoration: const InputDecoration(
+                            labelText: 'Telefone',
+                            suffixIcon: Icon(Icons.info, color: Colors.blue, size: 20),
+                          ),
+                          onTap: () => _mostrarAvisoEdicaoCliente(),
+                        ),
+                      ),
                       const SizedBox(width: 8),
                       Column(
                         children: [
@@ -289,7 +386,14 @@ class _TelaDePedidoState extends State<TelaDePedido> {
                       )
                     ],
                   ),
-                  TextFormField(controller: provider.emailController, decoration: const InputDecoration(labelText: 'Email')),
+                  TextFormField(
+                    controller: provider.emailController,
+                    decoration: const InputDecoration(
+                      labelText: 'Email',
+                      suffixIcon: Icon(Icons.info, color: Colors.blue, size: 20),
+                    ),
+                    onTap: () => _mostrarAvisoEdicaoCliente(),
+                  ),
                 ],
 
                 const Divider(height: 32),
@@ -317,7 +421,12 @@ class _TelaDePedidoState extends State<TelaDePedido> {
                     padding: const EdgeInsets.only(top: 8.0),
                     child: TextField(
                       controller: provider.enderecoEntregaController,
-                      decoration: const InputDecoration(labelText: 'Digite o endereço e adicione em observações', border: OutlineInputBorder()),
+                      decoration: const InputDecoration(
+                        labelText: 'Digite o endereço e adicione em observações',
+                        border: OutlineInputBorder(),
+                        suffixIcon: Icon(Icons.info, color: Colors.blue, size: 20),
+                      ),
+                      onTap: () => _mostrarAvisoEdicaoCliente(),
                     ),
                   ),
                 
