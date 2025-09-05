@@ -59,9 +59,10 @@ class _TelaDashboardState extends State<TelaDashboard> {
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
+        // LAYOUT ATUALIZADO PARA GRELHA 3x2x1
         child: Column(
           children: [
-            // --- KPIs ---
+            // --- LINHA 1: KPIs ---
             Row(
               children: [
                 Expanded(
@@ -87,7 +88,7 @@ class _TelaDashboardState extends State<TelaDashboard> {
                 Expanded(
                   child: _buildKpiCard(
                     title: 'Pedidos Pendentes',
-                    value: appData.pendingOrderCount, // Valor direto do provider
+                    value: appData.pendingOrderCount,
                     formatter: (value) => (value as int).toString(),
                     icon: Icons.pending_actions,
                     color: Colors.orange.shade800,
@@ -95,54 +96,47 @@ class _TelaDashboardState extends State<TelaDashboard> {
                 ),
               ],
             ),
-            const SizedBox(height: 24),
-            // --- Gráficos e Rankings ---
+            const SizedBox(height: 16),
+            // --- LINHA 2: Rankings ---
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // --- Gráfico de Barras ---
                 Expanded(
-                  flex: 2,
-                  child: _buildSectionCard(
-                    title: 'Pedidos nos Últimos 7 Dias',
-                    child: FutureBuilder<Map<String, int>>(
-                      future: _pedidosSemanaFuture,
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState == ConnectionState.waiting) {
-                          return const Center(child: CircularProgressIndicator());
-                        }
-                        if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                          return const Center(child: Text('Sem dados recentes.'));
-                        }
-                        return SizedBox(
-                          height: 300,
-                          child: _buildBarChart(snapshot.data!, theme),
-                        );
-                      },
-                    ),
+                  child: _buildRankingCard(
+                    title: 'Top 5 Produtos Mais Vendidos',
+                    future: _topProdutosFuture,
+                    icon: Icons.inventory_2,
                   ),
                 ),
                 const SizedBox(width: 16),
-                // --- Rankings ---
                 Expanded(
-                  flex: 1,
-                  child: Column(
-                    children: [
-                      _buildRankingCard(
-                        title: 'Top 5 Produtos Mais Vendidos',
-                        future: _topProdutosFuture,
-                        icon: Icons.inventory_2,
-                      ),
-                      const SizedBox(height: 16),
-                      _buildRankingCard(
-                        title: 'Top 5 Clientes',
-                        future: _topClientesFuture,
-                        icon: Icons.people,
-                      ),
-                    ],
+                  child: _buildRankingCard(
+                    title: 'Top 5 Clientes',
+                    future: _topClientesFuture,
+                    icon: Icons.people,
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 16),
+            // --- LINHA 3: Gráfico de Barras ---
+            _buildSectionCard(
+              title: 'Pedidos nos Últimos 7 Dias',
+              child: FutureBuilder<Map<String, int>>(
+                future: _pedidosSemanaFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                    return const Center(child: Text('Sem dados recentes.'));
+                  }
+                  return SizedBox(
+                    height: 300,
+                    child: _buildBarChart(snapshot.data!, theme),
+                  );
+                },
+              ),
             ),
           ],
         ),

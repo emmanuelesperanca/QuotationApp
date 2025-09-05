@@ -13,7 +13,6 @@ class _TelaPreCadastroClienteState extends State<TelaPreCadastroCliente> {
   final _formKey = GlobalKey<FormState>();
   final _nomeController = TextEditingController();
   final _cpfCnpjController = TextEditingController();
-  final _enderecoController = TextEditingController();
   final _cidadeController = TextEditingController();
   final _estadoController = TextEditingController();
   final _telefoneController = TextEditingController();
@@ -34,7 +33,6 @@ class _TelaPreCadastroClienteState extends State<TelaPreCadastroCliente> {
     _cpfCnpjController.removeListener(_validarCpfCnpj);
     _nomeController.dispose();
     _cpfCnpjController.dispose();
-    _enderecoController.dispose();
     _cidadeController.dispose();
     _estadoController.dispose();
     _telefoneController.dispose();
@@ -45,7 +43,8 @@ class _TelaPreCadastroClienteState extends State<TelaPreCadastroCliente> {
 
   void _validarCpfCnpj() async {
     final text = _cpfCnpjController.text;
-    if (text.length > 10) { // Valida apenas para CPFs/CNPJs mais completos
+    // Valida a partir do 4º caractere
+    if (text.length >= 4) {
       setState(() => _isValidatingCpf = true);
       final existe = await widget.database.clienteExistsByCpfCnpj(text);
       if (mounted) {
@@ -61,10 +60,10 @@ class _TelaPreCadastroClienteState extends State<TelaPreCadastroCliente> {
 
   void _salvarPreCadastro() async {
     if (_formKey.currentState!.validate() && _consentimento && _cpfCnpjError == null) {
+      // String de pré-cadastro sem o endereço completo
       final String preCadastroString = 
         'Nome: ${_nomeController.text}\n'
         'CPF/CNPJ: ${_cpfCnpjController.text}\n'
-        'Endereço: ${_enderecoController.text}, ${_cidadeController.text} - ${_estadoController.text}\n'
         'Telefone: ${_telefoneController.text}\n'
         'E-mail: ${_emailController.text}\n'
         'CRO: ${_croController.text}';
@@ -72,7 +71,7 @@ class _TelaPreCadastroClienteState extends State<TelaPreCadastroCliente> {
       final novoPreCadastro = PreCadastrosCompanion.insert(
         nome: _nomeController.text,
         cpfCnpj: Value(_cpfCnpjController.text),
-        enderecoCompleto: Value('${_enderecoController.text}, ${_cidadeController.text} - ${_estadoController.text}'),
+        enderecoCompleto: Value('${_cidadeController.text} - ${_estadoController.text}'), // Salva apenas cidade e estado
         telefone1: Value(_telefoneController.text),
         email: Value(_emailController.text),
         numeroCliente: (_croController.text),
@@ -86,7 +85,6 @@ class _TelaPreCadastroClienteState extends State<TelaPreCadastroCliente> {
       _formKey.currentState?.reset();
       _nomeController.clear();
       _cpfCnpjController.clear();
-      _enderecoController.clear();
       _cidadeController.clear();
       _estadoController.clear();
       _telefoneController.clear();
@@ -124,8 +122,6 @@ class _TelaPreCadastroClienteState extends State<TelaPreCadastroCliente> {
                   suffixIcon: _isValidatingCpf ? const Padding(padding: EdgeInsets.all(8.0), child: CircularProgressIndicator()) : null,
                 ),
               ),
-              const SizedBox(height: 16),
-              TextFormField(controller: _enderecoController, decoration: const InputDecoration(labelText: 'Endereço', border: OutlineInputBorder())),
               const SizedBox(height: 16),
               Row(
                 children: [

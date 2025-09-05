@@ -47,19 +47,25 @@ class _TelaDePedidoState extends State<TelaDePedido> {
 
   void _abrirSelecaoPromocao() async {
     final pedidoProvider = context.read<PedidoProvider>();
-    if (pedidoProvider.itensPedido.isNotEmpty && !pedidoProvider.temItensPromocionais) {
+    // LÓGICA ATUALIZADA: Pergunta se quer limpar o pedido apenas se houver itens NÃO promocionais
+    if (pedidoProvider.itensPedido.any((item) => !item.isPromocional)) {
       final confirm = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Atenção'),
-          content: const Text('Aplicar uma promoção irá limpar os itens do seu pedido atual. Deseja continuar?'),
+          content: const Text('Aplicar uma promoção irá limpar os itens NÃO promocionais do seu pedido atual. Deseja continuar?'),
           actions: [
             TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Não')),
             FilledButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Sim')),
           ],
         ),
       );
-      if (confirm != true) return;
+       if (confirm == true) {
+        // Limpa apenas os itens não promocionais
+        pedidoProvider.limparItensNaoPromocionais();
+      } else {
+        return; // Cancela se o utilizador disser não
+      }
     }
 
     if (!mounted) return;
@@ -255,6 +261,18 @@ class _TelaDePedidoState extends State<TelaDePedido> {
                       provider.setEnderecosAlternativos(enderecos);
                     }
                   },
+                   // LABELTEXT ADICIONADO
+                  fieldViewBuilder: (context, controller, focusNode, onSubmitted) {
+                    return TextFormField(
+                      controller: controller,
+                      focusNode: focusNode,
+                      onFieldSubmitted: (_) => onSubmitted(),
+                      decoration: const InputDecoration(
+                        labelText: 'Buscar Cliente por Nome, CPF/CNPJ ou Código',
+                        border: OutlineInputBorder(),
+                      ),
+                    );
+                  },
                 ),
                 if (provider.clienteSelecionado != null) ...[
                   const SizedBox(height: 8),
@@ -276,7 +294,6 @@ class _TelaDePedidoState extends State<TelaDePedido> {
 
                 const Divider(height: 32),
 
-                 // SEÇÃO DE ENTREGA E PAGAMENTO
                 CheckboxListTile(
                   title: const Text('Usar endereço principal para entrega?'),
                   value: provider.usarEnderecoPrincipal,
@@ -372,31 +389,45 @@ class _TelaDePedidoState extends State<TelaDePedido> {
                 const SizedBox(height: 16),
                 Text('Itens do Pedido', style: Theme.of(context).textTheme.headlineSmall),
                 const SizedBox(height: 8),
-                if(!provider.temItensPromocionais)
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Autocomplete<Produto>(
-                          displayStringForOption: (Produto option) => '${option.referencia} - ${option.descricao}',
-                          optionsBuilder: (TextEditingValue textEditingValue) {
-                            if (textEditingValue.text.isEmpty) return const Iterable<Produto>.empty();
-                            return widget.database.searchProdutos(textEditingValue.text);
-                          },
-                          onSelected: (Produto selection) {
-                            provider.adicionarProduto(selection);
-                          },
-                        ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Autocomplete<Produto>(
+                        displayStringForOption: (Produto option) => '${option.referencia} - ${option.descricao}',
+                        optionsBuilder: (TextEditingValue textEditingValue) {
+                          if (textEditingValue.text.isEmpty) return const Iterable<Produto>.empty();
+                          return widget.database.searchProdutos(textEditingValue.text);
+                        },
+                        onSelected: (Produto selection) {
+                          provider.adicionarProduto(selection);
+                        },
+                        // LABELTEXT ADICIONADO
+                        fieldViewBuilder: (context, controller, focusNode, onSubmitted) {
+                          return TextFormField(
+                            controller: controller,
+                            focusNode: focusNode,
+                            onFieldSubmitted: (_) {
+                              onSubmitted();
+                              controller.clear();
+                            },
+                            decoration: const InputDecoration(
+                              labelText: 'Buscar Produto por Cód. ou Descrição',
+                              border: OutlineInputBorder(),
+                            ),
+                          );
+                        },
                       ),
-                      const SizedBox(width: 8),
-                      IconButton.filled(
-                        icon: const Icon(Icons.list_alt),
-                        onPressed: _abrirListaProdutos,
-                        tooltip: 'Selecionar da lista',
-                        iconSize: 28,
-                      ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton.filled(
+                      icon: const Icon(Icons.list_alt),
+                      onPressed: _abrirListaProdutos,
+                      tooltip: 'Selecionar da lista',
+                      iconSize: 28,
+                    ),
+                  ],
+                ),
                 
                 const SizedBox(height: 16),
                 if (hasItemSelected && !provider.temItensPromocionais)

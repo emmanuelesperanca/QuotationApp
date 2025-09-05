@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../database.dart';
 import '../models/item_pedido.dart';
 import '../models/promocao.dart';
@@ -7,69 +8,107 @@ import '../screens/pedido/tela_selecao_variacoes.dart';
 
 class PedidoProvider with ChangeNotifier {
   final AppDatabase database;
+
+  // Construtor
   PedidoProvider(this.database);
 
-  // --- ESTADO DO FORMULÁRIO ---
+  // --- Estado do Formulário ---
   dynamic _clienteSelecionado;
   bool _buscarPreCadastro = false;
   bool _usarEnderecoPrincipal = true;
   String _metodoPagamento = 'Pix';
   int _parcelasCartao = 1;
-  bool _retiraEstande = false;
-  String _metodoDeEntrega = "Padrão";
-  bool _telefoneConfirmado = false;
-  List<EnderecoAlternativo> _enderecosAlternativos = [];
-  EnderecoAlternativo? _enderecoAlternativoSelecionado;
-  bool _mostrarCampoOutroEndereco = false;
-
+  final List<ItemPedido> _itensPedido = [];
+  
   final _telefoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _codigoAssessorController = TextEditingController();
   final _enderecoEntregaController = TextEditingController();
   final _promocodeController = TextEditingController();
   final _obsController = TextEditingController();
-
-  // --- ESTADO DOS ITENS DO PEDIDO ---
-  final List<ItemPedido> _itensPedido = [];
-  final List<TextEditingController> _descontoControllers = [];
-  final _descontoMassaController = TextEditingController();
-  bool _selectAllItems = false;
-  bool _temItensPromocionais = false;
   
-  // --- LISTAS CONSTANTES ---
+  bool _telefoneConfirmado = false;
+  List<EnderecoAlternativo> _enderecosAlternativos = [];
+  EnderecoAlternativo? _enderecoAlternativoSelecionado;
+  bool _mostrarCampoOutroEndereco = false;
+
+  bool _retiraEstande = false;
+  String _metodoDeEntrega = "Padrão";
   final List<String> _listaMetodosEntrega = ["Motoboy", "Correios", "Padrão", "Retira Loja"];
 
+  bool _selectAllItems = false;
+  final _descontoMassaController = TextEditingController();
+  final List<TextEditingController> _descontoControllers = [];
+  bool _temItensPromocionais = false;
 
-  // --- GETTERS ---
+  // --- Getters ---
   dynamic get clienteSelecionado => _clienteSelecionado;
   bool get buscarPreCadastro => _buscarPreCadastro;
   bool get usarEnderecoPrincipal => _usarEnderecoPrincipal;
   String get metodoPagamento => _metodoPagamento;
   int get parcelasCartao => _parcelasCartao;
-  bool get retiraEstande => _retiraEstande;
-  String get metodoDeEntrega => _metodoDeEntrega;
-  bool get telefoneConfirmado => _telefoneConfirmado;
-  List<EnderecoAlternativo> get enderecosAlternativos => _enderecosAlternativos;
-  EnderecoAlternativo? get enderecoAlternativoSelecionado => _enderecoAlternativoSelecionado;
-  bool get mostrarCampoOutroEndereco => _mostrarCampoOutroEndereco;
-  
+  List<ItemPedido> get itensPedido => _itensPedido;
   TextEditingController get telefoneController => _telefoneController;
   TextEditingController get emailController => _emailController;
   TextEditingController get codigoAssessorController => _codigoAssessorController;
   TextEditingController get enderecoEntregaController => _enderecoEntregaController;
   TextEditingController get promocodeController => _promocodeController;
   TextEditingController get obsController => _obsController;
-  
-  List<ItemPedido> get itensPedido => _itensPedido;
-  List<TextEditingController> get descontoControllers => _descontoControllers;
-  TextEditingController get descontoMassaController => _descontoMassaController;
-  bool get selectAllItems => _selectAllItems;
-  bool get temItensPromocionais => _temItensPromocionais;
-  
+  bool get telefoneConfirmado => _telefoneConfirmado;
+  List<EnderecoAlternativo> get enderecosAlternativos => _enderecosAlternativos;
+  EnderecoAlternativo? get enderecoAlternativoSelecionado => _enderecoAlternativoSelecionado;
+  bool get mostrarCampoOutroEndereco => _mostrarCampoOutroEndereco;
+  bool get retiraEstande => _retiraEstande;
+  String get metodoDeEntrega => _metodoDeEntrega;
   List<String> get listaMetodosEntrega => _listaMetodosEntrega;
+  bool get selectAllItems => _selectAllItems;
+  TextEditingController get descontoMassaController => _descontoMassaController;
+  List<TextEditingController> get descontoControllers => _descontoControllers;
+  bool get temItensPromocionais => _temItensPromocionais;
 
 
-  // --- MÉTODOS DE CONTROLE DO FORMULÁRIO ---
+  // --- Ações ---
+
+  void limparPedido({bool promocaoAplicada = false}) {
+    _clienteSelecionado = null;
+    _usarEnderecoPrincipal = true;
+    _metodoPagamento = 'Pix';
+    _parcelasCartao = 1;
+    _itensPedido.clear();
+    _telefoneController.clear();
+    _emailController.clear();
+    _enderecoEntregaController.clear();
+    if (!promocaoAplicada) _promocodeController.clear();
+    _obsController.clear();
+    _telefoneConfirmado = false;
+    _enderecosAlternativos = [];
+    _enderecoAlternativoSelecionado = null;
+    _mostrarCampoOutroEndereco = false;
+    _retiraEstande = false;
+    _metodoDeEntrega = "Padrão";
+    _selectAllItems = false;
+    _descontoMassaController.clear();
+    for (var controller in _descontoControllers) {
+      controller.dispose();
+    }
+    _descontoControllers.clear();
+    _temItensPromocionais = promocaoAplicada;
+    notifyListeners();
+  }
+
+  // MÉTODO ADICIONADO PARA CORRIGIR O ERRO
+  void limparItensNaoPromocionais() {
+    // Itera pela lista de forma inversa para remover itens sem problemas de índice
+    for (int i = _itensPedido.length - 1; i >= 0; i--) {
+      if (!_itensPedido[i].isPromocional) {
+        _itensPedido.removeAt(i);
+        _descontoControllers.removeAt(i).dispose();
+      }
+    }
+    _recalcularStatusPromocao();
+    notifyListeners();
+  }
+
   void setCodigoAssessor(String codigo) {
     _codigoAssessorController.text = codigo;
     notifyListeners();
@@ -77,19 +116,18 @@ class PedidoProvider with ChangeNotifier {
 
   void toggleBuscaPreCadastro() {
     _buscarPreCadastro = !_buscarPreCadastro;
-    setCliente(null, null); // Limpa o cliente ao trocar o tipo de busca
+    _clienteSelecionado = null;
     notifyListeners();
   }
-  
+
   void setCliente(dynamic cliente, String? cpfCnpj) {
     _clienteSelecionado = cliente;
-    if (cliente != null) {
+    if (cliente is Cliente) {
       _telefoneController.text = cliente.telefone1 ?? '';
       _emailController.text = cliente.email ?? '';
-    } else {
-      _telefoneController.clear();
-      _emailController.clear();
-      _enderecosAlternativos = [];
+    } else if (cliente is PreCadastro) {
+      _telefoneController.text = cliente.telefone1 ?? '';
+      _emailController.text = cliente.email ?? '';
     }
     notifyListeners();
   }
@@ -100,55 +138,53 @@ class PedidoProvider with ChangeNotifier {
     _mostrarCampoOutroEndereco = false;
     notifyListeners();
   }
-  
-  void setTelefoneConfirmado(bool value) {
-    _telefoneConfirmado = value;
+
+  void setTelefoneConfirmado(bool confirmado) {
+    _telefoneConfirmado = confirmado;
     notifyListeners();
   }
 
-  void setUsarEnderecoPrincipal(bool value) {
-    _usarEnderecoPrincipal = value;
+  void setUsarEnderecoPrincipal(bool usar) {
+    _usarEnderecoPrincipal = usar;
     notifyListeners();
   }
 
-  void setEnderecoAlternativo(EnderecoAlternativo? value) {
-    _enderecoAlternativoSelecionado = value;
-    _mostrarCampoOutroEndereco = (value == null);
-    if (value != null) {
-      _enderecoEntregaController.text = value.enderecoFormatado;
+  void setEnderecoAlternativo(EnderecoAlternativo? endereco) {
+    _enderecoAlternativoSelecionado = endereco;
+    _mostrarCampoOutroEndereco = (endereco == null);
+    if (endereco != null) {
+      _enderecoEntregaController.text = endereco.enderecoFormatado;
     } else {
       _enderecoEntregaController.clear();
     }
     notifyListeners();
   }
 
-  void setRetiraEstande(bool value) {
-    _retiraEstande = value;
-    if (_retiraEstande) {
+  void setRetiraEstande(bool retira) {
+    _retiraEstande = retira;
+    if (retira) {
       _metodoDeEntrega = 'Retirada';
     } else {
       _metodoDeEntrega = 'Padrão';
     }
     notifyListeners();
   }
-  
-  void setMetodoEntrega(String value) {
-    _metodoDeEntrega = value;
+
+  void setMetodoEntrega(String metodo) {
+    _metodoDeEntrega = metodo;
     notifyListeners();
   }
 
-  void setMetodoPagamento(String value) {
-    _metodoPagamento = value;
+  void setMetodoPagamento(String metodo) {
+    _metodoPagamento = metodo;
     notifyListeners();
   }
 
-  void setParcelas(int value) {
-    _parcelasCartao = value;
+  void setParcelas(int parcelas) {
+    _parcelasCartao = parcelas;
     notifyListeners();
   }
 
-
-  // --- MÉTODOS DE CONTROLE DOS ITENS ---
   void adicionarProduto(Produto produto) {
     _itensPedido.add(ItemPedido(
       cod: produto.referencia,
@@ -162,19 +198,32 @@ class PedidoProvider with ChangeNotifier {
   void removerItem(int index) {
     _itensPedido.removeAt(index);
     _descontoControllers.removeAt(index).dispose();
+    _recalcularStatusPromocao();
     notifyListeners();
   }
   
-  void toggleSelectAll(bool value) {
-    _selectAllItems = value;
+  void aplicarDescontoEmMassa() {
+    final desconto = double.tryParse(_descontoMassaController.text) ?? 0.0;
+    for (int i = 0; i < _itensPedido.length; i++) {
+      if (_itensPedido[i].isSelected) {
+        _itensPedido[i].desconto = desconto;
+        _descontoControllers[i].text = desconto.toString();
+      }
+    }
+    _descontoMassaController.clear();
+    notifyListeners();
+  }
+
+  void toggleSelectAll(bool select) {
+    _selectAllItems = select;
     for (var item in _itensPedido) {
-      item.isSelected = value;
+      item.isSelected = select;
     }
     notifyListeners();
   }
 
-  void toggleItemSelection(int index, bool value) {
-    _itensPedido[index].isSelected = value;
+  void toggleItemSelection(int index, bool isSelected) {
+    _itensPedido[index].isSelected = isSelected;
     notifyListeners();
   }
 
@@ -185,86 +234,55 @@ class PedidoProvider with ChangeNotifier {
 
   void atualizarDescontoItem(int index, double desconto) {
     _itensPedido[index].desconto = desconto;
-    _descontoControllers[index].text = desconto.toString();
     notifyListeners();
   }
 
-  void aplicarDescontoEmMassa() {
-    final desconto = double.tryParse(_descontoMassaController.text) ?? 0.0;
-    for (int i = 0; i < _itensPedido.length; i++) {
-      if (_itensPedido[i].isSelected) {
-        atualizarDescontoItem(i, desconto);
-      }
+  void _recalcularStatusPromocao() {
+    _temItensPromocionais = _itensPedido.any((item) => item.isPromocional);
+    if (!_temItensPromocionais) {
+      _promocodeController.clear();
     }
-    _descontoMassaController.clear();
-    FocusManager.instance.primaryFocus?.unfocus();
-    notifyListeners();
   }
-  
-  Future<void> aplicarPromocao(Promocao promocao, BuildContext context) async {
-    limparItens();
-    _promocodeController.text = promocao.promocode;
-    _temItensPromocionais = true;
 
-    for (final itemPromo in promocao.itens) {
-      if (itemPromo.qtdDigitacao > 0) {
-        if (itemPromo.isFamiliaDeProdutos) {
-          final produtosSelecionados = await showDialog<List<ItemPedido>>(
-            context: context,
-            builder: (_) => TelaSelecaoVariacoes(
-              database: database,
-              itemPromocional: itemPromo,
-            ),
-          );
-          if (produtosSelecionados != null) {
-            for (var produto in produtosSelecionados) {
-              _itensPedido.add(produto);
-              _descontoControllers.add(TextEditingController(text: produto.desconto.toString()));
-            }
+  Future<void> aplicarPromocao(Promocao promocao, BuildContext context) async {
+    _promocodeController.text = promocao.promocode;
+
+    for (final itemPromocional in promocao.itens) {
+      if (itemPromocional.isFamiliaDeProdutos) {
+        final itensSelecionados = await showDialog<List<ItemPedido>>(
+          context: context,
+          builder: (_) => TelaSelecaoVariacoes(
+            database: database,
+            itemPromocional: itemPromocional,
+          ),
+        );
+        if (itensSelecionados != null) {
+          for (final itemSelecionado in itensSelecionados) {
+            _itensPedido.add(itemSelecionado);
+            _descontoControllers.add(TextEditingController(text: itemSelecionado.desconto.toString()));
           }
-        } else {
-          final produtoBase = await database.getProdutoPorCod(itemPromo.cod);
-          if (produtoBase != null) {
+        }
+      } else {
+        if (itemPromocional.qtdDigitacao > 0) {
+           final produtoBase = await database.getProdutoPorCod(itemPromocional.cod);
+           if (produtoBase != null) {
             _itensPedido.add(ItemPedido(
-              cod: itemPromo.cod,
+              cod: itemPromocional.cod,
               descricao: produtoBase.descricao,
               valorUnitario: produtoBase.valor,
-              qtd: itemPromo.qtdDigitacao,
-              desconto: itemPromo.descontoDigitacao,
+              qtd: itemPromocional.qtdDigitacao,
+              desconto: itemPromocional.descontoDigitacao,
               isPromocional: true,
             ));
-            _descontoControllers.add(TextEditingController(text: itemPromo.descontoDigitacao.toString()));
-          }
+            _descontoControllers.add(TextEditingController(text: itemPromocional.descontoDigitacao.toString()));
+           }
         }
       }
     }
+    
+    _recalcularStatusPromocao();
     notifyListeners();
   }
 
-  void limparItens() {
-    _itensPedido.clear();
-    for (var controller in _descontoControllers) {
-      controller.dispose();
-    }
-    _descontoControllers.clear();
-    _temItensPromocionais = false;
-    _promocodeController.clear();
-    notifyListeners();
-  }
-
-  // --- LIMPEZA GERAL ---
-  void limparPedido() {
-    limparItens();
-    setCliente(null, null);
-    _buscarPreCadastro = false;
-    _usarEnderecoPrincipal = true;
-    _metodoPagamento = 'Pix';
-    _parcelasCartao = 1;
-    _retiraEstande = false;
-    _metodoDeEntrega = "Padrão";
-    _telefoneConfirmado = false;
-    _obsController.clear();
-    notifyListeners();
-  }
 }
 

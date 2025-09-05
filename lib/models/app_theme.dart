@@ -58,14 +58,15 @@ final List<AppTheme> availableThemes = [
     innerBgAsset: 'assets/images/straumann_green_inner.jpg',
     brightness: Brightness.dark,
   ),
-  // NOVO TEMA ADICIONADO
+  // TEMA ATUALIZADO
   AppTheme(
-    id: 'one_plan_white',
+    id: 'one_plan',
     name: 'One Plan',
-    primaryColor: const Color(0xFFFFFFFF), // Fundo branco
-    secondaryColor: const Color(0xFF47B48A), // Detalhes em verde
-    mainBgAsset: 'assets/images/one_plan_main.jpg', // Usando um fundo claro como base
-    innerBgAsset: 'assets/images/one_plan_inner.jpg', // Usando um fundo claro como base
-    brightness: Brightness.light, // Tema claro
+    primaryColor: const Color(0xFF1C1C1E), // Preto quase puro
+    secondaryColor: const Color(0xFF47B48A), // Verde
+    mainBgAsset: 'assets/images/straumann_green_main.jpg', // Fundo escuro genérico
+    innerBgAsset: 'assets/images/straumann_green_inner.jpg', // Fundo escuro genérico
+    brightness: Brightness.dark,
   ),
 ];
+
