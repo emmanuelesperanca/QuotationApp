@@ -335,8 +335,18 @@ class _TelaDePedidoState extends State<TelaDePedido> {
                 const SizedBox(height: 8),
                 Autocomplete<Object>(
                   displayStringForOption: (option) {
-                    if (option is Cliente) return '${option.nome} - ${option.numeroCliente}';
-                    if (option is PreCadastro) return '${option.nome} - ${option.numeroCliente}';
+                    if (option is Cliente) {
+                      final cpfCnpj = option.cpfCnpj != null && option.cpfCnpj!.isNotEmpty 
+                          ? ' - ${option.cpfCnpj}' 
+                          : '';
+                      return '${option.nome}$cpfCnpj - ${option.numeroCliente}';
+                    }
+                    if (option is PreCadastro) {
+                      final cpfCnpj = option.cpfCnpj != null && option.cpfCnpj!.isNotEmpty 
+                          ? ' - ${option.cpfCnpj}' 
+                          : '';
+                      return '${option.nome}$cpfCnpj - ${option.numeroCliente}';
+                    }
                     return '';
                   },
                   optionsBuilder: (TextEditingValue textEditingValue) async {

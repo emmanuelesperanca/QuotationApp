@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../providers/app_data_notifier.dart';
 import '../../providers/auth_notifier.dart';
+import '../../services/csv_service.dart';
 
 class BrandingPage extends StatelessWidget {
   final Function(int)? onNavigate;
@@ -58,7 +60,7 @@ class BrandingPage extends StatelessWidget {
                         
                         Expanded(
                           child: GridView.count(
-                            crossAxisCount: 4,
+                            crossAxisCount: 3,
                             crossAxisSpacing: 24,
                             mainAxisSpacing: 24,
                             childAspectRatio: 1.2,
@@ -95,6 +97,14 @@ class BrandingPage extends StatelessWidget {
                                 icon: Icons.settings,
                                 color: Colors.purple,
                                 onTap: () => _navigateToPage(context, 4),
+                              ),
+                              _buildQuickActionCardTablet(
+                                context,
+                                title: "Carregar CSV",
+                                subtitle: "Bases do CSV local",
+                                icon: Icons.folder_open,
+                                color: Colors.indigo,
+                                onTap: () => _loadAllFromCsv(context),
                               ),
                             ],
                           ),
@@ -165,6 +175,13 @@ class BrandingPage extends StatelessWidget {
                                 icon: Icons.settings,
                                 color: Colors.purple,
                                 onTap: () => _navigateToPage(context, 4),
+                              ),
+                              _buildQuickActionCard(
+                                context,
+                                title: "Carregar CSV",
+                                icon: Icons.folder_open,
+                                color: Colors.indigo,
+                                onTap: () => _loadAllFromCsv(context),
                               ),
                             ],
                           ),
@@ -511,5 +528,140 @@ class BrandingPage extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  // Função para carregar todas as bases do CSV
+  Future<void> _loadAllFromCsv(BuildContext context) async {
+    final appData = Provider.of<AppDataNotifier>(context, listen: false);
+    
+    // Verifica se CSVs estão disponíveis
+    final csvDisponivel = await CsvService.csvDisponivel();
+    if (!csvDisponivel) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Arquivos CSV não encontrados'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
+    // Mostra loading
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+              ),
+              SizedBox(width: 12),
+              Text('Configurando bases para CSV e carregando dados...'),
+            ],
+          ),
+          backgroundColor: Colors.blue,
+          duration: Duration(seconds: 3),
+        ),
+      );
+    }
+
+    try {
+      // Salva preferências para usar CSV em todas as bases
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('clientes_usar_csv', true);
+      await prefs.setBool('produtos_usar_csv', true);
+      await prefs.setBool('enderecos_usar_csv', true);
+
+      // Carrega dados do CSV em paralelo
+      await Future.wait([
+        _loadClientesFromCsv(appData),
+        _loadProdutosFromCsv(appData),
+        _loadEnderecosFromCsv(appData),
+      ]);
+
+      // Mostra sucesso
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 12),
+                Text('Todas as bases carregadas do CSV com sucesso!'),
+              ],
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      // Mostra erro
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(child: Text('Erro ao carregar bases: $e')),
+              ],
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  // Carrega clientes do CSV
+  Future<void> _loadClientesFromCsv(AppDataNotifier appData) async {
+    final clientesCsv = await CsvService.carregarClientesDoCsv();
+    if (clientesCsv.isNotEmpty) {
+      await appData.database.apagarTodosClientes();
+      await appData.database.batch((batch) {
+        batch.insertAll(appData.database.clientes, clientesCsv);
+      });
+      
+      // Atualiza timestamp
+      final now = DateTime.now();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('lastClientSync', now.millisecondsSinceEpoch);
+    }
+  }
+
+  // Carrega produtos do CSV
+  Future<void> _loadProdutosFromCsv(AppDataNotifier appData) async {
+    final produtosCsv = await CsvService.carregarProdutosDoCsv();
+    if (produtosCsv.isNotEmpty) {
+      await appData.database.apagarTodosProdutos();
+      await appData.database.batch((batch) {
+        batch.insertAll(appData.database.produtos, produtosCsv);
+      });
+      
+      // Atualiza timestamp
+      final now = DateTime.now();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('lastProductSync', now.millisecondsSinceEpoch);
+    }
+  }
+
+  // Carrega endereços do CSV
+  Future<void> _loadEnderecosFromCsv(AppDataNotifier appData) async {
+    final enderecosCsv = await CsvService.carregarEnderecosDoCsv();
+    if (enderecosCsv.isNotEmpty) {
+      await appData.database.apagarTodosEnderecos();
+      await appData.database.batch((batch) {
+        batch.insertAll(appData.database.enderecosAlternativos, enderecosCsv);
+      });
+      
+      // Atualiza timestamp
+      final now = DateTime.now();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt('lastEnderecoSync', now.millisecondsSinceEpoch);
+    }
   }
 }

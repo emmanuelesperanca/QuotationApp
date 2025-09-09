@@ -83,74 +83,176 @@ class TelaConfiguracoes extends StatelessWidget {
               const Divider(color: Colors.white54),
               SizedBox(height: ResponsiveHelper.getSpacing(context)),
               
+              // Seção de Sincronização - v1.0.1
+              Consumer<AppDataNotifier>(
+                builder: (context, appDataNotifier, _) {
+                  return Card(
+                    color: Colors.blue.withOpacity(0.1),
+                    child: Padding(
+                      padding: EdgeInsets.all(ResponsiveHelper.getSpacing(context)),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.sync, color: Colors.blue),
+                              SizedBox(width: ResponsiveHelper.getSpacing(context, base: 8.0)),
+                              Text(
+                                'Configurações de Sincronização',
+                                style: TextStyle(
+                                  fontSize: ResponsiveHelper.getResponsiveFontSize(context, 16),
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: ResponsiveHelper.getSpacing(context)),
+                          
+                          SwitchListTile(
+                            title: Text(
+                              'Sincronização Automática',
+                              style: TextStyle(
+                                fontSize: ResponsiveHelper.getResponsiveFontSize(context, 14),
+                                color: Colors.white,
+                              ),
+                            ),
+                            subtitle: Text(
+                              'Sincroniza dados automaticamente a cada 6 horas',
+                              style: TextStyle(
+                                fontSize: ResponsiveHelper.getResponsiveFontSize(context, 12),
+                                color: Colors.white70,
+                              ),
+                            ),
+                            value: appDataNotifier.autoSyncEnabled,
+                            activeColor: Colors.blue,
+                            onChanged: (value) {
+                              appDataNotifier.setAutoSyncEnabled(value);
+                            },
+                          ),
+                          
+                          if (appDataNotifier.devToolsEnabled) ...[
+                            const Divider(color: Colors.white30),
+                            ListTile(
+                              leading: const Icon(Icons.play_arrow, color: Colors.green),
+                              title: Text(
+                                'Sincronizar Agora',
+                                style: TextStyle(
+                                  fontSize: ResponsiveHelper.getResponsiveFontSize(context, 14),
+                                  color: Colors.white,
+                                ),
+                              ),
+                              subtitle: Text(
+                                'Força sincronização manual imediata',
+                                style: TextStyle(
+                                  fontSize: ResponsiveHelper.getResponsiveFontSize(context, 12),
+                                  color: Colors.white70,
+                                ),
+                              ),
+                              enabled: !appDataNotifier.isSyncing,
+                              onTap: () => _forciarSincronizacao(context),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
+              
+              SizedBox(height: ResponsiveHelper.getSpacing(context)),
+              
               // Seção de Desenvolvimento/Debug
-              Card(
-                color: Colors.red.withOpacity(0.1),
-                child: ExpansionTile(
-                  leading: const Icon(Icons.build, color: Colors.orange),
-                  title: Text(
-                    'Ferramentas de Desenvolvimento',
-                    style: TextStyle(
-                      fontSize: ResponsiveHelper.getResponsiveFontSize(context, 16),
-                    ),
-                  ),
-                  subtitle: Text(
-                    '⚠️ Use apenas se houver problemas',
-                    style: TextStyle(
-                      fontSize: ResponsiveHelper.getResponsiveFontSize(context, 12),
-                    ),
-                  ),
-                  children: [
-                    ListTile(
-                      leading: const Icon(Icons.refresh, color: Colors.red),
+              Consumer<AppDataNotifier>(
+                builder: (context, appDataNotifier, _) {
+                  return Card(
+                    color: Colors.red.withOpacity(0.1),
+                    child: ExpansionTile(
+                      leading: const Icon(Icons.build, color: Colors.orange),
                       title: Text(
-                        'Reset Completo do Banco de Dados',
+                        'Ferramentas de Desenvolvimento',
                         style: TextStyle(
-                          fontSize: ResponsiveHelper.getResponsiveFontSize(context, 14),
+                          fontSize: ResponsiveHelper.getResponsiveFontSize(context, 16),
                         ),
                       ),
                       subtitle: Text(
-                        'Apaga todos os dados e recria as tabelas',
+                        '⚠️ Use apenas se houver problemas',
                         style: TextStyle(
                           fontSize: ResponsiveHelper.getResponsiveFontSize(context, 12),
                         ),
                       ),
-                      onTap: () => _confirmarResetBanco(context),
+                      children: [
+                        SwitchListTile(
+                          title: Text(
+                            'Ativar Ferramentas de Desenvolvimento',
+                            style: TextStyle(
+                              fontSize: ResponsiveHelper.getResponsiveFontSize(context, 14),
+                            ),
+                          ),
+                          subtitle: Text(
+                            'Habilita opções avançadas de sincronização',
+                            style: TextStyle(
+                              fontSize: ResponsiveHelper.getResponsiveFontSize(context, 12),
+                            ),
+                          ),
+                          value: appDataNotifier.devToolsEnabled,
+                          activeColor: Colors.orange,
+                          onChanged: (value) {
+                            appDataNotifier.setDevToolsEnabled(value);
+                          },
+                        ),
+                        ListTile(
+                          leading: const Icon(Icons.refresh, color: Colors.red),
+                          title: Text(
+                            'Reset Completo do Banco de Dados',
+                            style: TextStyle(
+                              fontSize: ResponsiveHelper.getResponsiveFontSize(context, 14),
+                            ),
+                          ),
+                          subtitle: Text(
+                            'Apaga todos os dados e recria as tabelas',
+                            style: TextStyle(
+                              fontSize: ResponsiveHelper.getResponsiveFontSize(context, 12),
+                            ),
+                          ),
+                          onTap: () => _confirmarResetBanco(context),
+                        ),
+                        ListTile(
+                          leading: const Icon(Icons.sync_problem, color: Colors.orange),
+                          title: Text(
+                            'Forçar Reset Sincronização',
+                            style: TextStyle(
+                              fontSize: ResponsiveHelper.getResponsiveFontSize(context, 14),
+                            ),
+                          ),
+                          subtitle: Text(
+                            'Reset do estado de sincronização',
+                            style: TextStyle(
+                              fontSize: ResponsiveHelper.getResponsiveFontSize(context, 12),
+                            ),
+                          ),
+                          onTap: () => _forcarResetSync(context),
+                        ),
+                        ListTile(
+                          leading: const Icon(Icons.cloud_sync, color: Colors.blue),
+                          title: Text(
+                            'Testar Configuração Remota',
+                            style: TextStyle(
+                              fontSize: ResponsiveHelper.getResponsiveFontSize(context, 14),
+                            ),
+                          ),
+                          subtitle: Text(
+                            'Força verificação da configuração na API',
+                            style: TextStyle(
+                              fontSize: ResponsiveHelper.getResponsiveFontSize(context, 12),
+                            ),
+                          ),
+                          onTap: () => _testarConfigRemota(context),
+                        ),
+                      ],
                     ),
-                    ListTile(
-                      leading: const Icon(Icons.sync_problem, color: Colors.orange),
-                      title: Text(
-                        'Forçar Reset Sincronização',
-                        style: TextStyle(
-                          fontSize: ResponsiveHelper.getResponsiveFontSize(context, 14),
-                        ),
-                      ),
-                      subtitle: Text(
-                        'Reset do estado de sincronização',
-                        style: TextStyle(
-                          fontSize: ResponsiveHelper.getResponsiveFontSize(context, 12),
-                        ),
-                      ),
-                      onTap: () => _forcarResetSync(context),
-                    ),
-                    ListTile(
-                      leading: const Icon(Icons.cloud_sync, color: Colors.blue),
-                      title: Text(
-                        'Testar Configuração Remota',
-                        style: TextStyle(
-                          fontSize: ResponsiveHelper.getResponsiveFontSize(context, 14),
-                        ),
-                      ),
-                      subtitle: Text(
-                        'Força verificação da configuração na API',
-                        style: TextStyle(
-                          fontSize: ResponsiveHelper.getResponsiveFontSize(context, 12),
-                        ),
-                      ),
-                      onTap: () => _testarConfigRemota(context),
-                    ),
-                  ],
-                ),
+                  );
+                },
               ),
             ],
           ),
@@ -289,6 +391,51 @@ class TelaConfiguracoes extends StatelessWidget {
         messenger.showSnackBar(
           SnackBar(
             content: Text('❌ Erro durante teste: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+  
+  Future<void> _forciarSincronizacao(BuildContext context) async {
+    final appDataNotifier = Provider.of<AppDataNotifier>(context, listen: false);
+    final messenger = ScaffoldMessenger.of(context);
+    
+    if (appDataNotifier.isSyncing) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('⚠️ Sincronização já está em andamento'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    
+    try {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('🔄 Iniciando sincronização manual...'),
+          backgroundColor: Colors.blue,
+        ),
+      );
+      
+      // Força a sincronização de todas as bases
+      await appDataNotifier.syncAllBasesSilently();
+      
+      if (context.mounted) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('✅ Sincronização manual concluída!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('❌ Erro durante sincronização: $e'),
             backgroundColor: Colors.red,
           ),
         );
