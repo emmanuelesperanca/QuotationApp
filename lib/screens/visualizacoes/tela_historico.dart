@@ -252,15 +252,34 @@ class _TelaHistoricoState extends State<TelaHistorico> {
   Widget _buildDetailRow(String title, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 120,
-            child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-          ),
-          Expanded(child: Text(value)),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          bool isMobile = constraints.maxWidth < 400;
+          
+          if (isMobile) {
+            // Layout mobile: título e valor em coluna
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                const SizedBox(height: 2),
+                Text(value, style: const TextStyle(fontSize: 13)),
+              ],
+            );
+          } else {
+            // Layout desktop: título e valor em linha
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 120,
+                  child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                ),
+                Expanded(child: Text(value)),
+              ],
+            );
+          }
+        },
       ),
     );
   }

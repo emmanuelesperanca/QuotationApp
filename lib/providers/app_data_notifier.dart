@@ -26,6 +26,10 @@ class AppDataNotifier with ChangeNotifier {
   AppDataNotifier(this.database) {
     updatePendingOrderCount();
     _loadSyncDates();
+    
+    // Verifica se é a primeira execução e inicia sincronização automática
+    _checkFirstRun();
+    
     // Inicia a sincronização automática em segundo plano
     Timer.periodic(const Duration(hours: 1), (timer) {
       if (!_isSyncing) {
@@ -63,6 +67,49 @@ class AppDataNotifier with ChangeNotifier {
       _lastCategoriaSync = DateTime.fromMillisecondsSinceEpoch(categoriaMillis);
     }
     notifyListeners();
+  }
+  
+  // Verifica se é a primeira execução e inicia sincronização automática
+  Future<void> _checkFirstRun() async {
+    final prefs = await SharedPreferences.getInstance();
+    final isFirstRun = prefs.getBool('first_run') ?? true;
+    
+    if (isFirstRun) {
+      print('🚀 AppDataNotifier: Primeira execução detectada');
+      
+      // Verifica se as bases estão vazias
+      final clientesCount = await database.countClientes();
+      final produtosCount = await database.countProdutos();
+      final enderecosCount = await database.countEnderecos();
+      
+      print('📊 Contadores atuais: Clientes=$clientesCount, Produtos=$produtosCount, Endereços=$enderecosCount');
+      
+      // Se pelo menos uma das bases estiver vazia, inicia sincronização automática
+      if (clientesCount == 0 || produtosCount == 0 || enderecosCount == 0) {
+        print('🔄 Iniciando sincronização automática da primeira execução...');
+        
+        // Marca que já não é mais a primeira execução
+        await prefs.setBool('first_run', false);
+        
+        // Inicia a sincronização em background
+        _startFirstRunSync();
+      } else {
+        // Se as bases já têm dados, só marca como não sendo primeira execução
+        await prefs.setBool('first_run', false);
+        print('✅ Bases já contêm dados, sincronização automática não necessária');
+      }
+    }
+  }
+  
+  // Sincronização específica para primeira execução (em background)
+  Future<void> _startFirstRunSync() async {
+    // Executa em uma nova "thread" para não bloquear a UI
+    Future.delayed(const Duration(seconds: 2), () async {
+      if (!_isSyncing) {
+        print('🔄 Iniciando sincronização silenciosa da primeira execução...');
+        await syncAllBasesSilently();
+      }
+    });
   }
   
   void cancelSync() {

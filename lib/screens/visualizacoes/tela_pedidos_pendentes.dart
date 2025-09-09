@@ -32,6 +32,85 @@ class _TelaPedidosPendentesState extends State<TelaPedidosPendentes> {
     });
   }
 
+  Future<void> _reenviarTodosPedidos() async {
+    final pedidos = await _pedidosPendentesFuture;
+    if (pedidos.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Nenhum pedido pendente para reenviar')),
+      );
+      return;
+    }
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reenviar Todos os Pedidos'),
+        content: Text('Deseja tentar reenviar todos os ${pedidos.length} pedidos pendentes?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Reenviar Todos'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() {
+      _isSending = true;
+    });
+
+    int sucessos = 0;
+    int falhas = 0;
+    
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+    for (final pedido in pedidos) {
+      try {
+        final pedidoData = jsonDecode(pedido.pedidoJson);
+        final pdfBytes = await PdfService.generateOrderPdfBytes(pedidoData);
+        final pdfBase64 = base64Encode(pdfBytes);
+        pedidoData['pdf_base64'] = pdfBase64;
+
+        final sucesso = await ApiService.enviarPedido(pedidoData);
+
+        if (sucesso) {
+          final appPedidoId = pedidoData['app_pedido_id'] as String;
+          await widget.database.inserePedidoEnviado(pedido.pedidoJson, appPedidoId);
+          await widget.database.deletaPedidoPendente(pedido.id);
+          sucessos++;
+        } else {
+          falhas++;
+        }
+      } catch (e) {
+        falhas++;
+      }
+    }
+
+    setState(() {
+      _isSending = false;
+    });
+
+    if (mounted) {
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'Processamento concluído: $sucessos enviados com sucesso, $falhas falharam',
+            style: const TextStyle(color: Colors.white),
+          ),
+          backgroundColor: sucessos > 0 ? Colors.green : Colors.red,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+      _refreshData();
+    }
+  }
+
   Future<void> _reenviarPedido(PedidoPendente pedido) async {
     setState(() {
       _isSending = true;
@@ -193,7 +272,25 @@ class _TelaPedidosPendentesState extends State<TelaPedidosPendentes> {
       appBar: AppBar(
         title: const Text('Pedidos Pendentes'),
         actions: [
-          IconButton(icon: const Icon(Icons.refresh), onPressed: _refreshData),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _refreshData,
+            tooltip: 'Atualizar Lista',
+          ),
+          IconButton(
+            icon: _isSending 
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                )
+              : const Icon(Icons.send_and_archive),
+            onPressed: _isSending ? null : _reenviarTodosPedidos,
+            tooltip: 'Reenviar Todos os Pedidos',
+          ),
           if (Provider.of<AuthNotifier>(context).username == 'admin')
             IconButton(
               icon: const Icon(Icons.delete_sweep),
@@ -337,21 +434,73 @@ class _TelaPedidosPendentesState extends State<TelaPedidosPendentes> {
             ),
         ],
       ),
+      floatingActionButton: LayoutBuilder(
+        builder: (context, constraints) {
+          bool isMobile = constraints.maxWidth < 600;
+          
+          // Só mostra o FAB no mobile, no desktop o botão do AppBar é suficiente
+          if (!isMobile) return const SizedBox.shrink();
+          
+          return FutureBuilder<List<PedidoPendente>>(
+            future: _pedidosPendentesFuture,
+            builder: (context, snapshot) {
+              final hasPedidos = snapshot.hasData && snapshot.data!.isNotEmpty;
+              
+              return FloatingActionButton.extended(
+                onPressed: (_isSending || !hasPedidos) ? null : _reenviarTodosPedidos,
+                icon: _isSending 
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                    )
+                  : const Icon(Icons.send_and_archive),
+                label: Text(_isSending ? 'Enviando...' : 'Reenviar Todos'),
+                backgroundColor: _isSending || !hasPedidos 
+                  ? Colors.grey 
+                  : Theme.of(context).primaryColor,
+              );
+            },
+          );
+        },
+      ),
     );
   }
 
   Widget _buildDetailRow(String title, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 120,
-            child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-          ),
-          Expanded(child: Text(value)),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          bool isMobile = constraints.maxWidth < 400;
+          
+          if (isMobile) {
+            // Layout mobile: título e valor em coluna
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                const SizedBox(height: 2),
+                Text(value, style: const TextStyle(fontSize: 13)),
+              ],
+            );
+          } else {
+            // Layout desktop: título e valor em linha
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 120,
+                  child: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                ),
+                Expanded(child: Text(value)),
+              ],
+            );
+          }
+        },
       ),
     );
   }

@@ -161,12 +161,13 @@ class PdfService {
   }
 
   static pw.Table _buildItemsTable(List<ItemPedido> itens) {
-    final headers = ['Cód.', 'Descrição', 'Qtd', 'Desc. %', 'Total'];
+    final headers = ['Cód.', 'Descrição', 'Qtd', 'Valor Unit.', 'Desc. %', 'Total'];
     final data = itens.map((item) {
       return [
         item.cod,
         item.descricao,
         item.qtd.toString(),
+        'R\$ ${item.valorUnitario.toStringAsFixed(2)}',
         item.desconto.toStringAsFixed(2),
         'R\$ ${item.valorFinal.toStringAsFixed(2)}',
       ];
@@ -184,13 +185,15 @@ class PdfService {
         2: pw.Alignment.center,
         3: pw.Alignment.centerRight,
         4: pw.Alignment.centerRight,
+        5: pw.Alignment.centerRight,
       },
        columnWidths: {
         0: const pw.FlexColumnWidth(2),
-        1: const pw.FlexColumnWidth(5),
+        1: const pw.FlexColumnWidth(4),
         2: const pw.FlexColumnWidth(1),
-        3: const pw.FlexColumnWidth(1.5),
-        4: const pw.FlexColumnWidth(2),
+        3: const pw.FlexColumnWidth(1.8),
+        4: const pw.FlexColumnWidth(1.2),
+        5: const pw.FlexColumnWidth(1.8),
       },
     );
   }

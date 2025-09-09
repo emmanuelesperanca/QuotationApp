@@ -2,8 +2,8 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/order_simulator.iml" filepath="$PROJECT_DIR$/order_simulator.iml" />
-      <module fileurl="file://$PROJECT_DIR$/android/order_simulator_android.iml" filepath="$PROJECT_DIR$/android/order_simulator_android.iml" />
+      <module fileurl="file://$PROJECT_DIR$/order_to_smile.iml" filepath="$PROJECT_DIR$/order_to_smile.iml" />
+      <module fileurl="file://$PROJECT_DIR$/android/order_to_smile_android.iml" filepath="$PROJECT_DIR$/android/order_to_smile_android.iml" />
     </modules>
   </component>
 </project>

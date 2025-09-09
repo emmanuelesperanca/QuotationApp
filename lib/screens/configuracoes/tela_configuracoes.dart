@@ -5,6 +5,7 @@ import '../../providers/theme_notifier.dart';
 import '../../database.dart';
 import '../../providers/app_data_notifier.dart';
 import '../../services/config_service.dart';
+import '../../utils/responsive_helper.dart';
 
 class TelaConfiguracoes extends StatelessWidget {
   final AppDatabase database;
@@ -16,71 +17,143 @@ class TelaConfiguracoes extends StatelessWidget {
     
     return Scaffold(
       backgroundColor: Colors.transparent,
-      appBar: AppBar(
-        title: const Text('Configurações de Tema'),
-        backgroundColor: Colors.black.withOpacity(0.5),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: ListView(
-          children: [
-            ...availableThemes.map((theme) {
-              return Card(
-                color: Colors.black.withOpacity(0.5),
-                child: RadioListTile<String>(
-                  title: Text(theme.name),
-                  subtitle: Row(
-                    children: [
-                      Container(width: 20, height: 20, color: theme.primaryColor),
-                      const SizedBox(width: 8),
-                      Container(width: 20, height: 20, color: theme.secondaryColor),
-                    ],
+      appBar: ResponsiveHelper.isMobile(context) ? AppBar(
+        title: const Text('Configurações'),
+        backgroundColor: Colors.black.withOpacity(0.8),
+        foregroundColor: Colors.white,
+      ) : null,
+      body: ResponsiveScrollView(
+        child: ResponsiveHelper.responsiveContainer(
+          context: context,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (!ResponsiveHelper.isMobile(context)) ...[
+                Text(
+                  'Configurações de Tema',
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
                   ),
-                  value: theme.id,
-                  groupValue: themeNotifier.currentThemeId,
-                  onChanged: (value) {
-                    if (value != null) {
-                      themeNotifier.updateTheme(value);
-                    }
-                  },
                 ),
-              );
-            }).toList(),
-            
-            const SizedBox(height: 32),
-            const Divider(),
-            const SizedBox(height: 16),
-            
-            // Seção de Desenvolvimento/Debug
-            Card(
-              color: Colors.red.withOpacity(0.1),
-              child: ExpansionTile(
-                leading: const Icon(Icons.build, color: Colors.orange),
-                title: const Text('Ferramentas de Desenvolvimento'),
-                subtitle: const Text('⚠️ Use apenas se houver problemas'),
-                children: [
-                  ListTile(
-                    leading: const Icon(Icons.refresh, color: Colors.red),
-                    title: const Text('Reset Completo do Banco de Dados'),
-                    subtitle: const Text('Apaga todos os dados e recria as tabelas'),
-                    onTap: () => _confirmarResetBanco(context),
+                SizedBox(height: ResponsiveHelper.getSpacing(context)),
+              ],
+              ...availableThemes.map((theme) {
+                return Card(
+                  color: Colors.black.withOpacity(0.5),
+                  margin: EdgeInsets.symmetric(
+                    vertical: ResponsiveHelper.getSpacing(context, base: 4.0),
                   ),
-                  ListTile(
-                    leading: const Icon(Icons.sync_problem, color: Colors.orange),
-                    title: const Text('Forçar Reset Sincronização'),
-                    subtitle: const Text('Reset do estado de sincronização'),
-                    onTap: () => _forcarResetSync(context),
+                  child: RadioListTile<String>(
+                    title: Text(
+                      theme.name,
+                      style: TextStyle(
+                        fontSize: ResponsiveHelper.getResponsiveFontSize(context, 16),
+                        color: Colors.white,
+                      ),
+                    ),
+                    subtitle: Row(
+                      children: [
+                        Container(
+                          width: ResponsiveHelper.isMobile(context) ? 16 : 20,
+                          height: ResponsiveHelper.isMobile(context) ? 16 : 20,
+                          color: theme.primaryColor,
+                        ),
+                        SizedBox(width: ResponsiveHelper.getSpacing(context, base: 8.0)),
+                        Container(
+                          width: ResponsiveHelper.isMobile(context) ? 16 : 20,
+                          height: ResponsiveHelper.isMobile(context) ? 16 : 20,
+                          color: theme.secondaryColor,
+                        ),
+                      ],
+                    ),
+                    value: theme.id,
+                    groupValue: themeNotifier.currentThemeId,
+                    activeColor: theme.primaryColor,
+                    onChanged: (value) {
+                      if (value != null) {
+                        themeNotifier.updateTheme(value);
+                      }
+                    },
                   ),
-                  ListTile(
-                    leading: const Icon(Icons.cloud_sync, color: Colors.blue),
-                    title: const Text('Testar Configuração Remota'),
-                    subtitle: const Text('Força verificação da configuração na API'),
-                    onTap: () => _testarConfigRemota(context),
+                );
+              }).toList(),
+              
+              SizedBox(height: ResponsiveHelper.getSpacing(context, base: 32.0)),
+              const Divider(color: Colors.white54),
+              SizedBox(height: ResponsiveHelper.getSpacing(context)),
+              
+              // Seção de Desenvolvimento/Debug
+              Card(
+                color: Colors.red.withOpacity(0.1),
+                child: ExpansionTile(
+                  leading: const Icon(Icons.build, color: Colors.orange),
+                  title: Text(
+                    'Ferramentas de Desenvolvimento',
+                    style: TextStyle(
+                      fontSize: ResponsiveHelper.getResponsiveFontSize(context, 16),
+                    ),
                   ),
-                ],
+                  subtitle: Text(
+                    '⚠️ Use apenas se houver problemas',
+                    style: TextStyle(
+                      fontSize: ResponsiveHelper.getResponsiveFontSize(context, 12),
+                    ),
+                  ),
+                  children: [
+                    ListTile(
+                      leading: const Icon(Icons.refresh, color: Colors.red),
+                      title: Text(
+                        'Reset Completo do Banco de Dados',
+                        style: TextStyle(
+                          fontSize: ResponsiveHelper.getResponsiveFontSize(context, 14),
+                        ),
+                      ),
+                      subtitle: Text(
+                        'Apaga todos os dados e recria as tabelas',
+                        style: TextStyle(
+                          fontSize: ResponsiveHelper.getResponsiveFontSize(context, 12),
+                        ),
+                      ),
+                      onTap: () => _confirmarResetBanco(context),
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.sync_problem, color: Colors.orange),
+                      title: Text(
+                        'Forçar Reset Sincronização',
+                        style: TextStyle(
+                          fontSize: ResponsiveHelper.getResponsiveFontSize(context, 14),
+                        ),
+                      ),
+                      subtitle: Text(
+                        'Reset do estado de sincronização',
+                        style: TextStyle(
+                          fontSize: ResponsiveHelper.getResponsiveFontSize(context, 12),
+                        ),
+                      ),
+                      onTap: () => _forcarResetSync(context),
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.cloud_sync, color: Colors.blue),
+                      title: Text(
+                        'Testar Configuração Remota',
+                        style: TextStyle(
+                          fontSize: ResponsiveHelper.getResponsiveFontSize(context, 14),
+                        ),
+                      ),
+                      subtitle: Text(
+                        'Força verificação da configuração na API',
+                        style: TextStyle(
+                          fontSize: ResponsiveHelper.getResponsiveFontSize(context, 12),
+                        ),
+                      ),
+                      onTap: () => _testarConfigRemota(context),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

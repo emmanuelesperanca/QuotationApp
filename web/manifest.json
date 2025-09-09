@@ -1,6 +1,6 @@
 {
-    "name": "order_simulator",
-    "short_name": "order_simulator",
+    "name": "order_to_smile",
+    "short_name": "order_to_smile",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

@@ -7,6 +7,8 @@ class AppTheme {
   final Color secondaryColor;
   final String mainBgAsset;
   final String innerBgAsset;
+  final String mainBgMobileAsset;
+  final String innerBgMobileAsset;
   final Brightness brightness;
 
   AppTheme({
@@ -16,8 +18,20 @@ class AppTheme {
     required this.secondaryColor,
     required this.mainBgAsset,
     required this.innerBgAsset,
+    required this.mainBgMobileAsset,
+    required this.innerBgMobileAsset,
     required this.brightness,
   });
+
+  // Método para obter o background principal baseado no tipo de dispositivo
+  String getMainBgAsset(bool isMobile) {
+    return isMobile ? mainBgMobileAsset : mainBgAsset;
+  }
+
+  // Método para obter o background interno baseado no tipo de dispositivo
+  String getInnerBgAsset(bool isMobile) {
+    return isMobile ? innerBgMobileAsset : innerBgAsset;
+  }
 }
 
 // --- LISTA DE TEMAS DISPONÍVEIS ---
@@ -29,6 +43,8 @@ final List<AppTheme> availableThemes = [
     secondaryColor: const Color(0xFF00A3E0),
     mainBgAsset: 'assets/images/straumann_main.jpg',
     innerBgAsset: 'assets/images/straumann_inner.jpg',
+    mainBgMobileAsset: 'assets/images/straumann_main_mobile.jpg',
+    innerBgMobileAsset: 'assets/images/straumann_inner.jpg', // Usando o mesmo para inner
     brightness: Brightness.dark,
   ),
   AppTheme(
@@ -38,6 +54,8 @@ final List<AppTheme> availableThemes = [
     secondaryColor: const Color(0xFF9C4D8B),
     mainBgAsset: 'assets/images/neodent_main.jpg',
     innerBgAsset: 'assets/images/neodent_inner.jpg',
+    mainBgMobileAsset: 'assets/images/neodent_main_mobile.jpg',
+    innerBgMobileAsset: 'assets/images/neodent_inner.jpg', // Usando o mesmo para inner
     brightness: Brightness.dark,
   ),
   AppTheme(
@@ -47,6 +65,8 @@ final List<AppTheme> availableThemes = [
     secondaryColor: const Color(0xFF7DD8F3),
     mainBgAsset: 'assets/images/clearcorrect_main.jpg',
     innerBgAsset: 'assets/images/clearcorrect_inner.jpg',
+    mainBgMobileAsset: 'assets/images/clearcorrect_main_mobile.jpg',
+    innerBgMobileAsset: 'assets/images/clearcorrect_inner.jpg', // Usando o mesmo para inner
     brightness: Brightness.light,
   ),
   AppTheme(
@@ -56,6 +76,8 @@ final List<AppTheme> availableThemes = [
     secondaryColor: const Color(0xFF46B98C),
     mainBgAsset: 'assets/images/straumann_green_main.jpg',
     innerBgAsset: 'assets/images/straumann_green_inner.jpg',
+    mainBgMobileAsset: 'assets/images/straumann_green_main_mobile.jpg',
+    innerBgMobileAsset: 'assets/images/straumann_green_inner.jpg', // Usando o mesmo para inner
     brightness: Brightness.dark,
   ),
   AppTheme(
@@ -65,6 +87,8 @@ final List<AppTheme> availableThemes = [
     secondaryColor: const Color(0xFF47B48A), // Verde
     mainBgAsset: 'assets/images/one_plan_main.jpg',
     innerBgAsset: 'assets/images/one_plan_inner.jpg',
+    mainBgMobileAsset: 'assets/images/one_plan_main_mobile.jpg',
+    innerBgMobileAsset: 'assets/images/one_plan_inner.jpg', // Usando o mesmo para inner
     brightness: Brightness.dark,
   ),
 ];

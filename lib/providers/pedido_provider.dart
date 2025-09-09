@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../database.dart';
 import '../models/item_pedido.dart';
 import '../models/promocao.dart';
+import '../models/condicoes_pagamento.dart';
 import '../screens/pedido/tela_selecao_variacoes.dart';
 
 
@@ -15,8 +16,8 @@ class PedidoProvider with ChangeNotifier {
   dynamic _clienteSelecionado;
   bool _buscarPreCadastro = false;
   bool _usarEnderecoPrincipal = true;
-  String _metodoPagamento = 'Pix';
-  int _parcelasCartao = 1;
+  CondicaoPagamento? _condicaoPagamentoSelecionada;
+  int? _parcelasSelecionadas;
   final List<ItemPedido> _itensPedido = [];
   
   final _telefoneController = TextEditingController();
@@ -44,8 +45,8 @@ class PedidoProvider with ChangeNotifier {
   dynamic get clienteSelecionado => _clienteSelecionado;
   bool get buscarPreCadastro => _buscarPreCadastro;
   bool get usarEnderecoPrincipal => _usarEnderecoPrincipal;
-  String get metodoPagamento => _metodoPagamento;
-  int get parcelasCartao => _parcelasCartao;
+  CondicaoPagamento? get condicaoPagamentoSelecionada => _condicaoPagamentoSelecionada;
+  int? get parcelasSelecionadas => _parcelasSelecionadas;
   List<ItemPedido> get itensPedido => _itensPedido;
   TextEditingController get telefoneController => _telefoneController;
   TextEditingController get emailController => _emailController;
@@ -71,8 +72,8 @@ class PedidoProvider with ChangeNotifier {
   void limparPedido({bool promocaoAplicada = false}) {
     _clienteSelecionado = null;
     _usarEnderecoPrincipal = true;
-    _metodoPagamento = 'Pix';
-    _parcelasCartao = 1;
+    _condicaoPagamentoSelecionada = null;
+    _parcelasSelecionadas = null;
     _itensPedido.clear();
     _telefoneController.clear();
     _emailController.clear();
@@ -150,7 +151,8 @@ class PedidoProvider with ChangeNotifier {
 
   void setEnderecoAlternativo(EnderecoAlternativo? endereco) {
     _enderecoAlternativoSelecionado = endereco;
-    _mostrarCampoOutroEndereco = (endereco == null);
+    // Para pessoa jurídica, não permite o modo "Outro endereço"
+    _mostrarCampoOutroEndereco = (endereco == null) && !clienteEhPessoaJuridica;
     if (endereco != null) {
       _enderecoEntregaController.text = endereco.enderecoFormatado;
       // Adiciona automaticamente nas observações quando um endereço é selecionado
@@ -178,14 +180,23 @@ class PedidoProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  void setMetodoPagamento(String metodo) {
-    _metodoPagamento = metodo;
+  void setCondicaoPagamento(CondicaoPagamento? condicao) {
+    _condicaoPagamentoSelecionada = condicao;
+    // Reset parcelas quando mudar a condição
+    _parcelasSelecionadas = null;
     notifyListeners();
   }
 
-  void setParcelas(int parcelas) {
-    _parcelasCartao = parcelas;
+  void setParcelasSelecionadas(int? parcelas) {
+    _parcelasSelecionadas = parcelas;
     notifyListeners();
+  }
+
+  // Verifica se o cliente selecionado é pessoa jurídica (código SAP inicia com 4452)
+  bool get clienteEhPessoaJuridica {
+    if (_clienteSelecionado == null) return false;
+    final numeroCliente = _clienteSelecionado!.numeroCliente as String?;
+    return numeroCliente?.startsWith('04453') == true;
   }
 
   void adicionarProduto(Produto produto) {

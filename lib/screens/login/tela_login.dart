@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../database.dart';
 import '../../providers/auth_notifier.dart';
+import '../../utils/responsive_utils.dart';
 import '../home/main_layout.dart';
 
 class TelaLogin extends StatefulWidget {
@@ -101,12 +102,21 @@ class _TelaLoginState extends State<TelaLogin> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = ResponsiveUtils.isMobile(context);
+    
+    // Usar background mobile quando em dispositivo mobile
+    final backgroundAsset = isMobile 
+        ? 'assets/images/login_bg_mobile.jpg' 
+        : 'assets/images/login_bg.jpg';
+    
     return Scaffold(
       body: Stack(
         children: [
           Positioned.fill(
-            child: Image.asset('assets/images/login_bg.jpg', fit: BoxFit.cover,
-            errorBuilder: (c, e, s) => Container(color: Colors.blueGrey),
+            child: Image.asset(
+              backgroundAsset, 
+              fit: BoxFit.cover,
+              errorBuilder: (c, e, s) => Container(color: Colors.blueGrey),
             ),
           ),
           Positioned.fill(
@@ -122,7 +132,7 @@ class _TelaLoginState extends State<TelaLogin> with TickerProviderStateMixin {
               child: Padding(
                 padding: const EdgeInsets.all(24.0),
                 child: SizedBox(
-                  width: 450,
+                  width: isMobile ? MediaQuery.of(context).size.width * 0.9 : 450,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [

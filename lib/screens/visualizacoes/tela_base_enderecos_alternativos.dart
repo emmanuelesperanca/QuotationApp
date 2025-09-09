@@ -113,31 +113,84 @@ class _TelaBaseEnderecosAlternativosState extends State<TelaBaseEnderecosAlterna
                   onChanged: (value) => setState(() => _enderecosFuture = widget.database.searchEnderecosAlternativos(value)),
                 ),
                 const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        lastSync != null 
-                        ? 'Última atualização: ${DateFormat('dd/MM/yy HH:mm').format(lastSync)} ($_totalEnderecos itens)' 
-                        : 'Nunca atualizado',
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    if (appData.isSyncing)
-                      ElevatedButton.icon(
-                        onPressed: appData.cancelSync,
-                        icon: const Icon(Icons.stop_circle_outlined),
-                        label: const Text('Parar'),
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-                      )
-                    else
-                      ElevatedButton.icon(
-                        onPressed: _handleSync,
-                        icon: const Icon(Icons.sync),
-                        label: const Text('Atualizar Base Online'),
-                      ),
-                  ],
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    bool isMobile = constraints.maxWidth < 600;
+                    
+                    if (isMobile) {
+                      // Layout vertical para mobile
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              lastSync != null 
+                              ? 'Última atualização: ${DateFormat('dd/MM/yy HH:mm').format(lastSync)} ($_totalEnderecos itens)' 
+                              : 'Nunca atualizado',
+                              style: const TextStyle(fontSize: 12),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          if (appData.isSyncing)
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                onPressed: appData.cancelSync,
+                                icon: const Icon(Icons.stop_circle_outlined),
+                                label: const Text('Parar'),
+                                style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+                              ),
+                            )
+                          else
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                onPressed: _handleSync,
+                                icon: const Icon(Icons.sync),
+                                label: const Text('Atualizar Base Online'),
+                              ),
+                            ),
+                        ],
+                      );
+                    } else {
+                      // Layout horizontal para tablet/desktop
+                      return Row(
+                        children: [
+                          Expanded(
+                            flex: 2,
+                            child: Text(
+                              lastSync != null 
+                              ? 'Última atualização: ${DateFormat('dd/MM/yy HH:mm').format(lastSync)} ($_totalEnderecos itens)' 
+                              : 'Nunca atualizado',
+                              style: const TextStyle(fontSize: 14),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Flexible(
+                            flex: 1,
+                            child: appData.isSyncing
+                              ? ElevatedButton.icon(
+                                  onPressed: appData.cancelSync,
+                                  icon: const Icon(Icons.stop_circle_outlined),
+                                  label: const Text('Parar'),
+                                  style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+                                )
+                              : ElevatedButton.icon(
+                                  onPressed: _handleSync,
+                                  icon: const Icon(Icons.sync),
+                                  label: const Text('Atualizar Base Online'),
+                                ),
+                          ),
+                        ],
+                      );
+                    }
+                  },
                 ),
                 if (appData.isSyncing)
                   Padding(
