@@ -25,6 +25,7 @@ class _TelaDePedidoState extends State<TelaDePedido> {
   late PedidoProvider _pedidoProvider;
   bool _isSending = false;
   bool _configCheckScheduled = false; // Flag para evitar múltiplas verificações
+  TextEditingController? _autocompleteController; // Controller para o campo de busca
   
   @override
   void initState() {
@@ -634,20 +635,46 @@ class _TelaDePedidoState extends State<TelaDePedido> {
                         },
                         onSelected: (Produto selection) {
                           provider.adicionarProduto(selection);
+                          // Limpa o campo após adicionar o produto
+                          if (_autocompleteController != null) {
+                            _autocompleteController!.clear();
+                          }
                         },
                         // LABELTEXT ADICIONADO
                         fieldViewBuilder: (context, controller, focusNode, onSubmitted) {
-                          return TextFormField(
-                            controller: controller,
-                            focusNode: focusNode,
-                            onFieldSubmitted: (_) {
-                              onSubmitted();
-                              controller.clear();
+                          // Captura a referência do controller interno
+                          _autocompleteController = controller;
+                          
+                          return StatefulBuilder(
+                            builder: (context, setFieldState) {
+                              return TextFormField(
+                                controller: controller,
+                                focusNode: focusNode,
+                                onChanged: (value) {
+                                  // Atualiza o estado para mostrar/esconder o botão clear
+                                  setFieldState(() {});
+                                },
+                                onFieldSubmitted: (_) {
+                                  onSubmitted();
+                                  controller.clear();
+                                  setFieldState(() {});
+                                },
+                                decoration: InputDecoration(
+                                  labelText: 'Buscar Produto por Cód. ou Descrição',
+                                  border: const OutlineInputBorder(),
+                                  suffixIcon: controller.text.isNotEmpty 
+                                    ? IconButton(
+                                        icon: const Icon(Icons.clear),
+                                        onPressed: () {
+                                          controller.clear();
+                                          setFieldState(() {});
+                                        },
+                                        tooltip: 'Limpar campo',
+                                      )
+                                    : null,
+                                ),
+                              );
                             },
-                            decoration: const InputDecoration(
-                              labelText: 'Buscar Produto por Cód. ou Descrição',
-                              border: OutlineInputBorder(),
-                            ),
                           );
                         },
                       ),
@@ -707,11 +734,25 @@ class _TelaDePedidoState extends State<TelaDePedido> {
                                           onChanged: item.isPromocional ? null : (value) => provider.toggleItemSelection(index, value!),
                                         ),
                                         Expanded(
-                                          child: Text(
-                                            item.descricao,
-                                            style: const TextStyle(fontWeight: FontWeight.bold),
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                'Código: ${item.cod}',
+                                                style: const TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.grey,
+                                                  fontFamily: 'monospace',
+                                                ),
+                                              ),
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                item.descricao,
+                                                style: const TextStyle(fontWeight: FontWeight.bold),
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ],
                                           ),
                                         ),
                                         if (!item.isPromocional)
@@ -792,11 +833,12 @@ class _TelaDePedidoState extends State<TelaDePedido> {
                         // Versão tablet/desktop - DataTable otimizada
                         double availableWidth = constraints.maxWidth;
                         double checkboxWidth = 50;
+                        double codigoWidth = 100;
                         double qtdWidth = 80;
                         double descontoWidth = 100;
                         double valorWidth = 120;
                         double acoesWidth = 80;
-                        double descricaoWidth = availableWidth - checkboxWidth - qtdWidth - descontoWidth - valorWidth - acoesWidth - 80; // 80 para espaçamentos
+                        double descricaoWidth = availableWidth - checkboxWidth - codigoWidth - qtdWidth - descontoWidth - valorWidth - acoesWidth - 100; // 100 para espaçamentos
                         
                         // Garante largura mínima para descrição
                         if (descricaoWidth < 150) {
@@ -823,6 +865,12 @@ class _TelaDePedidoState extends State<TelaDePedido> {
                                       value: provider.selectAllItems,
                                       onChanged: provider.temItensPromocionais ? null : (value) => provider.toggleSelectAll(value!),
                                     ),
+                                  ),
+                                ),
+                                DataColumn(
+                                  label: SizedBox(
+                                    width: codigoWidth,
+                                    child: const Text('Código', style: TextStyle(fontWeight: FontWeight.bold)),
                                   ),
                                 ),
                                 DataColumn(
@@ -866,6 +914,22 @@ class _TelaDePedidoState extends State<TelaDePedido> {
                                       child: Checkbox(
                                         value: item.isSelected,
                                         onChanged: item.isPromocional ? null : (value) => provider.toggleItemSelection(index, value!),
+                                      ),
+                                    ),
+                                  ),
+                                  DataCell(
+                                    SizedBox(
+                                      width: codigoWidth,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(vertical: 4),
+                                        child: Text(
+                                          item.cod,
+                                          style: const TextStyle(
+                                            fontFamily: 'monospace',
+                                            fontSize: 12,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
                                       ),
                                     ),
                                   ),

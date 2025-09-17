@@ -20,7 +20,7 @@ class AppDataNotifier with ChangeNotifier {
   Timer? _syncTimer;
   
   // Configurações de sincronização - v1.0.1
-  bool _autoSyncEnabled = true;
+  bool _autoSyncEnabled = false;
   bool _devToolsEnabled = false;
 
   // Valores totais aproximados para a barra de progresso
@@ -95,7 +95,7 @@ class AppDataNotifier with ChangeNotifier {
   // Carrega configurações de sincronização
   Future<void> _loadSyncConfig() async {
     final prefs = await SharedPreferences.getInstance();
-    _autoSyncEnabled = prefs.getBool('auto_sync_enabled') ?? true;
+    _autoSyncEnabled = prefs.getBool('auto_sync_enabled') ?? false;
     _devToolsEnabled = prefs.getBool('dev_tools_enabled') ?? false;
     
     notifyListeners();
@@ -154,13 +154,13 @@ class AppDataNotifier with ChangeNotifier {
     }
   }
   
-  // Sincronização específica para primeira execução (em background)
+  // Carregamento específico para primeira execução (CSV ao invés de API)
   Future<void> _startFirstRunSync() async {
     // Executa em uma nova "thread" para não bloquear a UI
     Future.delayed(const Duration(seconds: 2), () async {
       if (!_isSyncing) {
-        print('🔄 Iniciando sincronização silenciosa da primeira execução...');
-        await syncAllBasesSilently();
+        print('� Iniciando carregamento silencioso do CSV na primeira execução...');
+        await _loadAllFromCsvSilently();
       }
     });
   }
@@ -553,6 +553,69 @@ class AppDataNotifier with ChangeNotifier {
   Future<void> updatePendingOrderCount() async {
     _pendingOrderCount = await database.countPedidosPendentes();
     notifyListeners();
+  }
+
+  // Carrega dados do CSV silenciosamente na primeira execução
+  Future<void> _loadAllFromCsvSilently() async {
+    try {
+      // Verifica se CSVs estão disponíveis
+      final csvDisponivel = await CsvService.csvDisponivel();
+      if (!csvDisponivel) {
+        print('❌ Arquivos CSV não encontrados para primeira execução');
+        return;
+      }
+
+      print('📁 Configurando bases para CSV e carregando dados silenciosamente...');
+      
+      // Salva preferências para usar CSV em todas as bases
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('clientes_usar_csv', true);
+      await prefs.setBool('produtos_usar_csv', true);
+      await prefs.setBool('enderecos_usar_csv', true);
+
+      // Carrega dados do CSV em paralelo
+      await Future.wait([
+        _loadClientesFromCsvSilently(),
+        _loadProdutosFromCsvSilently(),
+        _loadEnderecosFromCsvSilently(),
+      ]);
+
+      print('✅ Todas as bases carregadas do CSV com sucesso na primeira execução!');
+      
+    } catch (e) {
+      print('❌ Erro ao carregar CSV na primeira execução: $e');
+    }
+  }
+
+  // Métodos auxiliares para carregamento silencioso do CSV
+  Future<void> _loadClientesFromCsvSilently() async {
+    try {
+      final clientesCsv = await CsvService.carregarClientesDoCsv();
+      await database.populateClientesFromAPI(clientesCsv);
+      print('✅ Clientes carregados do CSV: ${clientesCsv.length}');
+    } catch (e) {
+      print('❌ Erro ao carregar clientes do CSV: $e');
+    }
+  }
+
+  Future<void> _loadProdutosFromCsvSilently() async {
+    try {
+      final produtosCsv = await CsvService.carregarProdutosDoCsv();
+      await database.populateProdutosFromAPI(produtosCsv);
+      print('✅ Produtos carregados do CSV: ${produtosCsv.length}');
+    } catch (e) {
+      print('❌ Erro ao carregar produtos do CSV: $e');
+    }
+  }
+
+  Future<void> _loadEnderecosFromCsvSilently() async {
+    try {
+      final enderecosCsv = await CsvService.carregarEnderecosDoCsv();
+      await database.populateEnderecosFromAPI(enderecosCsv);
+      print('✅ Endereços carregados do CSV: ${enderecosCsv.length}');
+    } catch (e) {
+      print('❌ Erro ao carregar endereços do CSV: $e');
+    }
   }
 }
 
